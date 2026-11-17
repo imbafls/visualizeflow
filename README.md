@@ -7,22 +7,49 @@ and walkthrough step cites the code it was inferred from (file and lines at a
 fixed commit), and an independent checker tries to disprove every claim
 before the map is handed over.
 
-## Install
+## Quick start
 
-In Claude Code:
+You need [Claude Code](https://claude.com/claude-code), Node 20+ and Chrome (or Chromium).
+
+**1. Install it.** Paste this into Claude Code:
 
 ```
 /plugin install visualizeflow --marketplace imbafls/visualizeflow
 ```
 
-or, on older versions:
+<details><summary>Older Claude Code versions</summary>
 
 ```
 /plugin marketplace add imbafls/visualizeflow
 /plugin install visualizeflow@visualizeflow
 ```
 
-Then run `npm install` once in the installed plugin folder, or let the skill do it on first use.
+</details>
+
+Then restart Claude Code.
+
+**2. Map a project.** Open Claude Code in any repo and run:
+
+```
+/visualizeflow
+```
+
+Or just ask in your own words:
+
+```
+Map how this codebase works with visualizeflow, with walkthroughs of its main flows.
+```
+
+**3. Open your page.** When it finishes, it opens `~/visualizeflow/dist/index.html`. Every project
+you map is added to that one page. To see it again later:
+
+```
+/visualizeflow page
+```
+
+On first use it runs `npm install` inside the plugin folder (two dependencies), and it uses your
+installed Chrome to screenshot the map while checking it. A medium-sized repo takes about 20-40 minutes, mostly reading code and
+checking claims.
 
 ## Use
 
