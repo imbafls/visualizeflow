@@ -496,6 +496,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
 .trust a:hover{text-decoration:underline}
 .trust.warn{color:var(--warn)}
 .trustcard{display:grid;gap:4px;margin-top:6px;padding:12px 14px;border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:var(--r);background:var(--surface);max-width:84ch}
+.trustcard.open{border-left-color:var(--warn)}
 .trustcard b{font-size:13.5px}
 .trustcard p{font-size:13.5px;color:var(--muted)}
 details.about summary{cursor:pointer;color:var(--muted);font-size:13.5px}

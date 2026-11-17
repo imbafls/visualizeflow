@@ -19,3 +19,5 @@ export function takeArg(argv, name) {
 export const WORK = resolve(takeArg(process.argv, "--work") ?? process.env.VF_WORK ?? join(homedir(), "visualizeflow"));
 export const META = existsSync(join(WORK, "data/meta.json")) ? join(WORK, "data/meta.json") : join(PLUGIN, "data/meta.json");
 export const SRC = process.env.VF_SRC ? resolve(process.env.VF_SRC) : join(PLUGIN, "renderer");
+// Everything the page loads besides index.html. Nothing comes from the network.
+export const ASSETS = ["app.js", "styles.css", "fonts.css", "favicon.svg", "fonts/geist.woff2", "fonts/geist-mono.woff2"];

@@ -1,0 +1,552 @@
+{
+  "map": "immich",
+  "commit": "ff445d5fda8bf396e769df8977c316726dc25c9c",
+  "date": "17 Nov 2026",
+  "checkers": 5,
+  "claims": 76,
+  "confirmed": 76,
+  "unverified": 0,
+  "digest": "6783fc104600028042194460ced60ca1",
+  "independent": true,
+  "checkerNames": [
+    "parts checker",
+    "links checker",
+    "steps checker",
+    "re-check of corrected parts",
+    "second re-check of corrected parts"
+  ],
+  "verdicts": [
+    {
+      "id": "part:im-sdk",
+      "hash": "845e214dd7b6109b",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "mise.toml:72-99 runs server sync-open-api, then oazapfts into packages/sdk/src/fetch-client.ts and generate-dart-sdk.sh; fetch-client.ts:4 says DO NOT MODIFY (oazapfts); generate-dart-sdk.sh:16 runs openapi-generator-cli -g dart into mobile/generated/openapi, which mobile/pubspec.yaml:56-57 depends on."
+    },
+    {
+      "id": "part:im-web",
+      "hash": "8e19c312b38f0f4f",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "web/AGENTS.md:3 says SvelteKit SPA (SSR off), Svelte 5, talks through @immich/sdk; vite.config.ts:123 uses the static adapter with index.html fallback; websocket.ts:51-57 opens socket.io-client on /api/socket.io; only four direct fetch() calls exist in web/src (HLS session DELETE, cast HEAD, licence activation, service worker)."
+    },
+    {
+      "id": "part:im-mobile",
+      "hash": "4ca6d031b353303f",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "mobile/AGENTS.md:3 names Flutter + Drift (SQLite); background_upload.service.dart:5 imports background_downloader and lines 407-454 build an UploadTask with httpRequestMethod POST to '$serverEndpoint/assets', fileField assetData; pubspec.yaml:56-57 pulls in the generated openapi client."
+    },
+    {
+      "id": "part:im-cli",
+      "hash": "bef754fa68392134",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "index.ts:24-32 takes an API key, index.ts:44-50 defines upload with --skip-hash; asset.ts:270 sha1-hashes each file, asset.ts:229-248 calls checkBulkUpload and keeps only Accept results, asset.ts:434 POSTs to ${baseUrl}/assets; server/Dockerfile:98,101 copies and symlinks the CLI into the server image."
+    },
+    {
+      "id": "part:im-auth",
+      "hash": "4d8311414cebf8b0",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "auth.service.ts:241-268 checks share key, share slug, session token (two headers, query param, bearer, cookie) then API key, else 401; auth.service.ts:532-534 hashes the API key with SHA-256 before lookup; oauth.repository.ts:73-76 adds the PKCE challenge only if serverMetadata().supportsPKCE(), and getClient uses discovery()."
+    },
+    {
+      "id": "part:im-api",
+      "hash": "757b2e97cbc35f68",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "main.ts:99-112 forks the API worker and runs other workers as threads; app.common.ts:63-64 sets the 'api' global prefix and the socket.io WebSocketAdapter, lines 68-83 serve the web build with sirv; config.repository.ts:296 defaults the port to 2283; queue.service.ts:85-89 shows the API only watches job workers."
+    },
+    {
+      "id": "part:im-workers",
+      "hash": "9e9f199d0c7efbb1",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "job.repository.ts:90-100 creates one BullMQ Worker per QueueName that emits JobRun; job.service.ts:85-99 runs the @OnJob handler then onDone on Success or Skipped; onDone (102-257) chains SidecarCheck->AssetExtractMetadata, StorageTemplateMigrationSingle->AssetGenerateThumbnails (upload/copy), thumbnails->SmartSearch, AssetDetectFaces, Ocr and AssetEncodeVideo for videos; storage-template.service.ts:138-141 queues the storage template job on AssetMetadataExtracted."
+    },
+    {
+      "id": "part:im-media",
+      "hash": "7d65a78d4db8b1ea",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "media.repository.ts:2-9 imports exiftool-vendored, fluent-ffmpeg and sharp (ffprobe at :48, ffmpeg transcode at :460, sharp toFile at :209, thumbhash at :262, exiftool.write at :142); media.service.ts:206-216 routes videos and images to their thumbnail generators; metadata.repository.ts:89-148 wraps ExifTool read and write."
+    },
+    {
+      "id": "part:im-notify",
+      "hash": "8f82c32d2a848f78",
+      "verdict": "confirmed",
+      "checker": "second re-check of corrected parts",
+      "note": "notification.service.ts: handleAlbumInvite (340-388) and handleAlbumUpdate (390-444) both call sendAlbumLocalNotification (493-512, creates an in-app notification) and then render an email and queue SendMail only if emailNotifications.enabled and the per-type flag are set; onUserSignup (222-227) queues NotifyUserSignup only when notify is true (set from the admin create DTO in user-admin.service.ts 33-46) and handleUserSignup (308-338) only renders the WELCOME template and queues SendMail with no in-app notice; handleSendEmail (446-468) skips when smtp is disabled and otherwise sends via emailRepository.sendEmail with the smtp transport (nodemailer)."
+    },
+    {
+      "id": "part:im-library",
+      "hash": "fb1ece4fca6339f1",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "library.service.ts:45-67 runs only on the microservices worker, takes DatabaseLock.Library, creates the LibraryScan cron that queues LibraryScanQueueAll and (if watch is enabled) watches all libraries; lines 255-298 turn paths into assets and 428-438 queue SidecarCheck, which chains to metadata extraction."
+    },
+    {
+      "id": "part:im-ml",
+      "hash": "4a24b578b6087cd8",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "main.py:165-181 is the only inference route (/predict, alongside trivial / and /ping) taking 'entries' plus an image or text; main.py:187-194 gets the model from model_cache with ttl=settings.model_ttl and loads on demand (cache.py:25-28 evicts after the TTL); constants.py:62-92 lists M-CLIP, InsightFace and PaddleOCR names; config.dto.ts:664 defaults the URL to http://immich-machine-learning:3003 (config.py:95 immich_port 3003)."
+    },
+    {
+      "id": "part:im-oidc",
+      "hash": "59963a826d76ec24",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "oauth.repository.ts:201-226 calls openid-client discovery(new URL(issuerUrl), clientId, ...) with response_types ['code']; lines 88-98 exchange the code with authorizationCodeGrant (PKCE verifier when supported)."
+    },
+    {
+      "id": "part:im-hf",
+      "hash": "92e0eb42513d6e28",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "base.py:63-76 calls huggingface_hub snapshot_download('{settings.model_organization}/{model_name}') only when not cached, called from load(); schemas.py:49-51 defines the organisation 'immich-app' (config.py:79 default); docker-compose.yml:42-43 mounts model-cache at /cache, which the ML Dockerfile sets as MACHINE_LEARNING_CACHE_FOLDER."
+    },
+    {
+      "id": "part:im-smtp",
+      "hash": "16decdde3e28cf79",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "email.repository.ts:2 imports createTransport from nodemailer; lines 123-138 build a transport from the passed smtp options and call transport.sendMail; the options come from the admin's notifications.smtp config (notification.service.ts:448-462)."
+    },
+    {
+      "id": "part:im-disk",
+      "hash": "73c60185f873f61c",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "docker-compose.yml:21 mounts ${UPLOAD_LOCATION}:/data; enum.ts:372-379 lists exactly encoded-video, library, upload, profile, thumbs, backups; storage.core.ts:116-134 builds thumbnail and encoded-video paths under the media location."
+    },
+    {
+      "id": "part:im-db",
+      "hash": "c0ee4515799ea4c1",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "docker-compose.yml:59-66 uses ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0; constants.ts:37-42 lists VectorChord then pgvector and the smart_search / face_search vector tables; database.repository.ts:36-54 picks the available vector extension; map.repository.ts:154-171 reverse-geocodes against geodata_places with earth_box / earth_distance."
+    },
+    {
+      "id": "part:im-redis",
+      "hash": "147df9ee4ee54284",
+      "verdict": "confirmed",
+      "checker": "second re-check of corrected parts",
+      "note": "docker-compose.yml 52-57 runs valkey/valkey:9 as the redis service; config.repository.ts 318-329 sets BullMQ prefix 'immich_bull' and builds one queue per QueueName value; enum.ts 861-881 lists exactly 19 QueueName members (counted) including thumbnailGeneration, metadataExtraction, videoConversion and notifications; notification.service.ts 308 and 446 put both NotifyUserSignup and SendMail on QueueName.Notification; websocket.adapter.ts 13-24 attaches the @socket.io/redis-adapter with ioredis pub/sub clients built from the same redis config."
+    },
+    {
+      "id": "part:im-extlib",
+      "hash": "25ecab32159631d9",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "library.service.ts:133-140 watches library.importPaths with ignored: exclusionPatterns; lines 255-298 import paths as assets and processEntity (407-426) stores originalPath as the file's own path with isExternal: true, so nothing is copied."
+    },
+    {
+      "id": "part:im-actions",
+      "hash": "68d3415843e00af3",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "docker.yml:3-9 triggers on workflow_dispatch, push to main and release/*, pull_request and release published, building immich-server and immich-machine-learning; prepare-release.yml:81-107 bumps the version and pushes release/<line> from main; build-mobile.yml builds and signs the Android APK and draft-release.yml drafts the release."
+    },
+    {
+      "id": "part:im-ghcr",
+      "hash": "ce0c11a8e5a40e0d",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "docker.yml:93-117 lists the cpu, -cuda, -openvino, -armnn, -rknn, -rocm ML variants; lines 184-191 tag by branch/PR, commit-<sha>, v<semver>, v<major> and 'release' for the highest stable release; lines 212-215 mirror to Docker Hub only for non-prerelease releases; docker-compose.yml:15 pulls ghcr.io/immich-app/immich-server."
+    },
+    {
+      "id": "part:im-release",
+      "hash": "a779a173b9bfd295",
+      "verdict": "confirmed",
+      "checker": "parts checker",
+      "note": "draft-release.yml:162-183 runs gh release create with docker-compose.yml, docker-compose.rootless.yml, example.env, hwaccel.ml.yml, hwaccel.transcoding.yml, prometheus.yml and *.apk (downloaded release-apk-signed artifact); build-mobile.yml:194-207 runs fastlane beta or release in production, whose lanes call upload_to_play_store."
+    },
+    {
+      "id": "link:l-sdk-web",
+      "hash": "a42fe4082ab734c8",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "web/package.json:38 declares \"@immich/sdk\": \"workspace:*\" and the search page imports searchSmart/searchAssets from '@immich/sdk' at lines 31-40."
+    },
+    {
+      "id": "link:l-sdk-mobile",
+      "hash": "ab3e59797056a99e",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "mobile/pubspec.yaml:56-57 depends on openapi at path generated/openapi, and generate-dart-sdk.sh:14-16 runs openapi-generator-cli -g dart into ../mobile/generated/openapi."
+    },
+    {
+      "id": "link:l-web-api",
+      "hash": "83ba32cc64512194",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "fetch-client.ts:6886-6897 is searchSmart doing POST \"/search/smart\" via fetchJson, and websocket.ts:51-57 opens a socket.io client on path '/api/socket.io' with the websocket transport."
+    },
+    {
+      "id": "link:l-mobile-api",
+      "hash": "81737dff5d8d57df",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "background_upload.service.dart:407-454 builds a POST UploadTask to '$serverEndpoint/assets' with fileField 'assetData'; upload.repository.dart:60-81 builds a multipart POST to '$savedEndpoint/assets' with an assetData file."
+    },
+    {
+      "id": "link:l-cli-api",
+      "hash": "cbf23d3f5a8c9a16",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "packages/cli/src/commands/asset.ts:434-441 does fetch(`${baseUrl}/assets`, { method: 'post', body: formData }) with the file appended as assetData."
+    },
+    {
+      "id": "link:l-api-auth",
+      "hash": "6481d94d09140fc4",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "auth.guard.ts:99-123 returns early for public routes and otherwise calls authService.authenticate on the request; the guard is registered as APP_GUARD in app.module.ts:58, and the upload route carries @Authenticated at asset-media.controller.ts:51-53."
+    },
+    {
+      "id": "link:l-auth-oidc",
+      "hash": "e6111679e7a32352",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "oauth.repository.ts:51-81 builds the provider authorization URL with PKCE via buildAuthorizationUrl, and lines 88-98 call authorizationCodeGrant to exchange the callback code for tokens (then userinfo)."
+    },
+    {
+      "id": "link:l-api-db",
+      "hash": "c8cb317ec2f750ce",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "asset-media.service.ts:164-182 calls assetRepository.create with the new asset row, and search.repository.ts:320-337 runs a Kysely transaction ordering by `smart_search.embedding <=> embedding`."
+    },
+    {
+      "id": "link:l-api-redis",
+      "hash": "104f141945d7195f",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "asset-media.service.ts:202 queues JobName.AssetExtractMetadata, and job.repository.ts:197-227 queueAll calls BullMQ queue.add/addBulk; BullMQ's connection is the Redis config (config.repository.ts:318-321)."
+    },
+    {
+      "id": "link:l-redis-workers",
+      "hash": "02b632fad0ba20ba",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "job.repository.ts:90-100 creates one BullMQ Worker per QueueName whose processor emits 'JobRun', and job.service.ts:85-99 handles JobRun by calling jobRepository.run(job)."
+    },
+    {
+      "id": "link:l-workers-db",
+      "hash": "524896b6a87660ac",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "metadata.service.ts:411-417 (inside the @OnJob AssetExtractMetadata handler starting at line 228) upserts job status and emits AssetMetadataExtracted; search.repository.ts:480-486 inserts into smart_search with on-conflict update of the embedding."
+    },
+    {
+      "id": "link:l-api-disk",
+      "hash": "dfb2eadb82420826",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "file-upload.interceptor.ts:110-117 joins getUploadFolder/getUploadFilename (StorageFolder.Upload nested by user id, asset-media.service.ts:106-117) and opens a write stream there; asset-media.service.ts:303-318 serves encodedVideoPath || originalPath from disk."
+    },
+    {
+      "id": "link:l-workers-media",
+      "hash": "c769a009bd73dc18",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "media.service.ts:191-231 is the @OnJob AssetGenerateThumbnails handler calling generateVideoThumbnails/generateImageThumbnails, and lines 603-613 build an ffmpeg command and run mediaRepository.transcode(input, output, command)."
+    },
+    {
+      "id": "link:l-media-disk",
+      "hash": "303a953bc6ca0791",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "storage.core.ts:124-134 builds paths under StorageFolder.Thumbnails ('thumbs') and StorageFolder.EncodedVideo ('encoded-video') (enum.ts:372-379), and media.repository.ts:198-209 ends the sharp pipeline with .toFile(output)."
+    },
+    {
+      "id": "link:l-workers-ml",
+      "hash": "ae809116e8d66d61",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "machine-learning.repository.ts:162-188 POSTs form data to new URL('predict', url), trying healthy URLs first; smart-info.service.ts:103 (inside the @OnJob SmartSearch handler) calls encodeImage(previewFile.path, ...)."
+    },
+    {
+      "id": "link:l-api-ml",
+      "hash": "0c7b9ffa169a97c9",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "search.service.ts:325-340 looks up embeddingCache and otherwise calls machineLearningRepository.encodeText(dto.query, ...) then caches it; machine-learning.repository.ts:211-215 sends a SEARCH/TEXTUAL request through predict."
+    },
+    {
+      "id": "link:l-ml-hf",
+      "hash": "7a12d1a348e93c40",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "base.py:63-76 download() returns if cached, else calls huggingface_hub.snapshot_download for f\"{settings.model_organization}/{model_name}\" (organization defaults to 'immich-app'); load() calls download() first."
+    },
+    {
+      "id": "link:l-notify-smtp",
+      "hash": "548561e308bde309",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "notification.service.ts:446-463 is the @OnJob SendMail handler passing notifications.smtp.transport to emailRepository.sendEmail, and email.repository.ts:123-138 creates a nodemailer transport and calls transport.sendMail."
+    },
+    {
+      "id": "link:l-library-extlib",
+      "hash": "23db392d563113ac",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "library.service.ts:133-140 calls storageRepository.watch(library.importPaths, ...) and lines 255-280 (LibrarySyncFiles job) stat each path via processEntity and call assetRepository.createAll."
+    },
+    {
+      "id": "link:l-actions-ghcr",
+      "hash": "5968e4d1b8035977",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "docker.yml:119-135 logs in to ghcr.io and re-tags images there with buildx imagetools; lines 164-210 are the 'Build and Push ML' and 'Build and Push Server' jobs (packages: write) calling the reusable multi-runner-build workflow, where the push itself happens."
+    },
+    {
+      "id": "link:l-actions-release",
+      "hash": "2c34d8ca299584ce",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "draft-release.yml:79-84 pushes the git tag and 86-111 runs build-mobile.yml with signing secrets; lines 162-183 run `gh release create --draft` attaching the compose files, example.env and *.apk."
+    },
+    {
+      "id": "link:l-ghcr-api",
+      "hash": "dd800c60939cfdbf",
+      "verdict": "confirmed",
+      "checker": "links checker",
+      "note": "docker-compose.yml:13-15 sets the immich-server service image to ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}, and server/Dockerfile:89-101 copies the pruned server, the web build and the CLI into the final image."
+    },
+    {
+      "id": "step:upload:0",
+      "hash": "b142da8e3976c776",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "buildUploadTask (390-455) returns an UploadTask with httpRequestMethod POST, url '$serverEndpoint/assets' and fileField 'assetData'; the service enqueues it via enqueueBackgroundAll (background_downloader)."
+    },
+    {
+      "id": "step:upload:1",
+      "hash": "4a99d1fbe6e7b00c",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "POST /assets is guarded by Permission.AssetUpload and runs FileUploadInterceptor (multer custom storage writing to getUploadFolder = upload/<user>/xx/yy and hashing sha1) before uploadAsset, which calls requireAccess + requireQuota, creates the asset with checksum/sha1File and queues JobName.AssetExtractMetadata (line 202)."
+    },
+    {
+      "id": "step:upload:2",
+      "hash": "f6a7b9d392cc8b7d",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "queueAll (197-227) resolves each job's queue from its handler and calls BullMQ queue.add/addBulk; AssetExtractMetadata's handler is registered on QueueName.MetadataExtraction ('metadataExtraction') in metadata.service.ts:228."
+    },
+    {
+      "id": "step:upload:3",
+      "hash": "cf643533013ba518",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "handleMetadataExtraction reads exif tags (exiftool-vendored), dates, dimensions/file size and GPS, reverse-geocodes via mapRepository (geodata_places query in Postgres), then emits AssetMetadataExtracted; that event queues StorageTemplateMigrationSingle, whose onDone queues AssetGenerateThumbnails when source is upload/copy."
+    },
+    {
+      "id": "step:upload:4",
+      "hash": "b1daa31067431644",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "handleGenerateThumbnails calls generateImageThumbnails (sharp-backed generateThumbnail for preview + thumbnail, generateThumbhash) and stores the thumbhash; JobService.onDone then queues SmartSearch, AssetDetectFaces and Ocr and sends 'on_upload_success' (for Timeline/Archive assets)."
+    },
+    {
+      "id": "step:upload:5",
+      "hash": "6e2c00bab569b819",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "Three separate jobs each send the Preview file to the ML repository's predict() (POST <url>/predict): encodeImage (CLIP), detectFaces (detection + recognition) and ocr; config defaults have clip, facialRecognition and ocr all enabled: true (config.dto.ts:670-686)."
+    },
+    {
+      "id": "step:upload:6",
+      "hash": "60ecae2246e2f8ae",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "search.repository upsert (480-486) inserts into smart_search with on-conflict update; refreshFaces inserts new rows into asset_face and their embeddings into face_search, and each added face gets a FacialRecognition job (person.service 441-452)."
+    },
+    {
+      "id": "step:search:0",
+      "hash": "435f54fbb48aa0f5",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "loadNextPage calls searchSmart (imported from @immich/sdk) with language: $lang when the terms have query/queryAssetId and config.machineLearning.clip.enabled, otherwise searchAssets."
+    },
+    {
+      "id": "step:search:1",
+      "hash": "e5fd84f5980414cf",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "@Post('smart') calls service.searchSmart, which throws 'Smart search is not enabled' unless isSmartSearchEnabled and resolves userIds through getUserIdsToSearch(auth, dto.visibility)."
+    },
+    {
+      "id": "step:search:2",
+      "hash": "0dfd47c3c46ec5b5",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "resolveEmbedding builds the cache key modelName + query + language, and on a miss calls machineLearningRepository.encodeText (CLIP textual, POST /predict with a text form field, which main.py accepts)."
+    },
+    {
+      "id": "step:search:3",
+      "hash": "ae667b15cd0c589e",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "searchSmart sets 'vchordrq.probes' (VectorChord), inner-joins smart_search, orders by smart_search.embedding <=> embedding, and applies limit size+1 / offset for one page via paginationHelper."
+    },
+    {
+      "id": "step:search:4",
+      "hash": "23fbf16ab07c31f7",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "The response is destructured into { albums, assets }; albums.items and assets.items are pushed into searchResultAlbums/searchResultAssets and nextPage is taken from assets.nextPage."
+    },
+    {
+      "id": "step:faces:0",
+      "hash": "53a726b18a7577f9",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "handleDetectFaces returns Skipped when facial recognition is disabled or asset.visibility is Hidden (Failed if there is no preview), otherwise calls machineLearningRepository.detectFaces(previewFile.path, ...)."
+    },
+    {
+      "id": "step:faces:1",
+      "hash": "7d4a53f0d3751007",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "detectFaces requests the facial-recognition task with DETECTION and RECOGNITION models and returns faces (each consumed as { boundingBox, embedding }); the default model buffalo_l is in _INSIGHTFACE_MODELS (constants.py 70-75)."
+    },
+    {
+      "id": "step:faces:2",
+      "hash": "bdf4867188288a43",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "refreshFaces(facesToAdd, faceIdsToRemove, embeddings) saves faces and embeddings, then one FacialRecognition job per added face is queued (together with a FacialRecognitionQueueAll job)."
+    },
+    {
+      "id": "step:faces:3",
+      "hash": "f6679e584e6aced6",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "searchFaces queries face_search within maxDistance for minFaces results; a core face (>= minFaces matches, Timeline asset) takes a match's personGroupId or creates a group, a non-core face is re-queued with deferred: true (nuance: a face that only matched itself is skipped outright, and a deferred face can still join the nearest existing person)."
+    },
+    {
+      "id": "step:faces:4",
+      "hash": "66cb1f64d14118e8",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "When no person exists for the group, a person is created and PersonGenerateThumbnail is queued; its handler uses previewPath for videos and originalPath otherwise (embedded RAW preview when extractEmbedded applies) and crops to the face box."
+    },
+    {
+      "id": "step:video:0",
+      "hash": "886b5c42c74d0c2d",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "In onDone for AssetGenerateThumbnails, AssetEncodeVideo is pushed onto the follow-up jobs when asset.type === AssetType.Video (job.service.ts 182-184)."
+    },
+    {
+      "id": "step:video:1",
+      "hash": "634e0de3d3d7b280",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "getTranscodeTarget(ffmpeg, ...) decides the target; TranscodeTarget.None with no remux needed returns Skipped; otherwise transcode runs and on failure retries with software decoding, then with acceleration disabled."
+    },
+    {
+      "id": "step:video:2",
+      "hash": "d3bfa95f6e281cfe",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "getEncodedVideoPath = getNestedPath(StorageFolder.EncodedVideo ('encoded-video'), ownerId, '<id>.mp4') which nests by filename[0:2]/[2:4]; after transcoding upsertFile records it as AssetFileType.EncodedVideo."
+    },
+    {
+      "id": "step:video:3",
+      "hash": "64d35e7d2abd0077",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "GET :id/video/playback (described as supporting byte range requests) sends service.playbackVideo, which returns asset.encodedVideoPath || asset.originalPath."
+    },
+    {
+      "id": "step:video:4",
+      "hash": "138e1ad26c47311a",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "assetFileUrl is getAssetHlsUrl (…/video/stream/main.m3u8) when publicConfig.ffmpeg.realtime.enabled, else getAssetPlaybackUrl (/assets/:id/video/playback), or the original when playOriginalVideo is set; it is assigned to the video element's src."
+    },
+    {
+      "id": "step:share:0",
+      "hash": "806dee6297ed0e47",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "The modal builds sharedLinkCreateDto with type Album when albumId is set plus password, expiresAt, allowUpload, allowDownload (also slug, description, showMetadata) and runs createSharedLinkMutation; the server has @Post() on @Controller('shared-links')."
+    },
+    {
+      "id": "step:share:1",
+      "hash": "1b6733cc2f7b2d62",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "create() requires Permission.AlbumShare for album links and always sets key: cryptoRepository.randomBytes(50), with slug: dto.slug || null."
+    },
+    {
+      "id": "step:share:2",
+      "hash": "ca830a1280f1b354",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "sharedLinkRepository.create inserts the link; handleError maps the 'shared_link_slug_uq' constraint violation to BadRequestException('Failed to save shared link')."
+    },
+    {
+      "id": "step:share:3",
+      "hash": "7d404e8d28ee221a",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "loadSharedLink (used by the share/[key] and s/[slug] route loaders) calls getMySharedLink({ key, slug }) unless a matching cached link exists."
+    },
+    {
+      "id": "step:share:4",
+      "hash": "0b42fd7eb3138462",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "validateSharedLinkKey looks the key up with sharedLinkRepository.getByKey, rejects when there is no user or expiresAt is past, and returns AuthDto { user: sharedLink.user, sharedLink }."
+    },
+    {
+      "id": "step:share:5",
+      "hash": "05d55ccaeb688a5b",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "Both GET :id/thumbnail and GET :id/video/playback are declared with @Authenticated({ permission: Permission.AssetView, sharedLink: true })."
+    },
+    {
+      "id": "step:release:0",
+      "hash": "f7ce159428202457",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "Steps run 'mise //:release --type', commit 'chore: version ${VERSION}' and push, then (when run from main) push HEAD to refs/heads/release/v<major>.<minor>."
+    },
+    {
+      "id": "step:release:1",
+      "hash": "ff0d2a3b3a058c21",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "The tag job pushes the version tag from the release branch, build_mobile runs build-mobile.yml with signing secrets (artifact release-apk-signed), and 'gh release create --draft' attaches the docker compose files, example.env, hwaccel/prometheus files and *.apk."
+    },
+    {
+      "id": "step:release:2",
+      "hash": "6d4a7956090d2ad7",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "docker.yml triggers on release types [published] (release is a force-event), and builds immich-server plus the ML matrix (cpu, cuda, openvino, armnn, rknn, rocm)."
+    },
+    {
+      "id": "step:release:3",
+      "hash": "c0f513b420117d7d",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "Tag rules include semver v{{version}}, v{{major}} and raw 'release' (non-prerelease, highest overall); the mirror job runs only for non-prerelease release events and copies ghcr.io tags to docker.io/altran1502."
+    },
+    {
+      "id": "step:release:4",
+      "hash": "b39c0973d44eea4a",
+      "verdict": "confirmed",
+      "checker": "steps checker",
+      "note": "docker-compose.yml uses image ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release} and example.env sets IMMICH_VERSION=v3; the pull/up -d upgrade command is in docs/docs/install/upgrading.md:16."
+    }
+  ]
+}

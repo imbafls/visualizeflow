@@ -1,17 +1,17 @@
 // Screenshot one entry the way the page draws it, to check a map by eye.
 //
-//   node tools/shot.mjs <id> [map|overview|progress] [out.png] [width] [height]
+//   node tools/shot.mjs <id> [map|overview|progress] [out.png] [width] [height] --work <work>
 //
-// Builds a one-entry preview in tools/.preview/<id>/ (no validation, so it
+// Builds a one-entry preview in <work>/.preview/<id>/ (no validation, so it
 // works while other apps are being edited) and screenshots it with headless
 // Chromium (playwright-core). Page errors are printed and fail the run. Default: the map view at 1600x1000, saved as
-// tools/.preview/<id>/<view>.png. Prints the PNG path. Read the PNG to look.
+// <work>/.preview/<id>/<view>.png. Prints the PNG path. Read the PNG to look.
 
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright-core";
-import { WORK, META, SRC } from "./paths.mjs";
+import { WORK, META, SRC, ASSETS } from "./paths.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [id, view = "map", outArg, wArg, hArg] = process.argv.slice(2);
@@ -35,7 +35,8 @@ mkdirSync(dir, { recursive: true });
 const html = readFileSync(join(SRC, "template.html"), "utf8")
   .replace("<<DATA>>", () => JSON.stringify(data).replace(/<\//g, "<\\/")).replace(/<<GENERATED>>/g, "preview");
 writeFileSync(join(dir, "index.html"), html);
-for (const f of ["app.js", "styles.css", "favicon.svg"]) copyFileSync(join(SRC, f), join(dir, f));
+mkdirSync(join(dir, "fonts"), { recursive: true });
+for (const f of ASSETS) copyFileSync(join(SRC, f), join(dir, f));
 
 const out = resolve(outArg || join(dir, `${isApp ? view : "progress"}.png`));
 const W = +(wArg || 1600), H = +(hArg || 1000);
@@ -46,7 +47,7 @@ catch { browser = await chromium.launch({ channel: "chrome" }); }
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: +(process.env.VF_DSF || 1) });
 const problems = [];
 page.on("pageerror", (e) => problems.push("page error: " + e.message));
-page.on("console", (m) => { if (m.type() === "error" && !/fonts.g/.test(m.text())) problems.push("console: " + m.text()); });
+page.on("console", (m) => { if (m.type() === "error") problems.push("console: " + m.text()); });
 await page.goto(url);
 await page.waitForTimeout(1500);
 // VF_STAGE=1 hides the page header so the map and its panel fill the frame (for hero images).
