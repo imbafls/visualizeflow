@@ -171,6 +171,13 @@ function brandsOf(a, max){
   (a.nodes || []).forEach(function(n){ if (!n.brand || seen[n.brand]) return; seen[n.brand] = 1; (GENERIC[n.brand] ? generic : named).push(n.brand); });
   return named.concat(generic).slice(0, max);
 }
+function allSame(){ return !!app && app.nodes.every(function(n){ return n.status===app.nodes[0].status && !n.unverified; }); }
+function trustLine(list, unv){
+  var n = (list || []).length;
+  if (unv) return '<p class="trust warn">Not confirmed: an independent check could not confirm this against the code.</p>';
+  if (!n) return '';
+  return '<p class="trust"><a href="#" data-jump-ev="1">Backed by '+plural(n, "place", "places")+' in the source code</a>'+(app.source && app.source.refuted ? ', and confirmed by a second, independent check.' : '.')+'</p>';
+}
 function plural(n, one, many){ return n + " " + (n===1 ? one : many); }
 function renderJump(){
   var j = $("jump");
@@ -191,16 +198,18 @@ function renderCrumbs(){
   var mid = page==="progress" ? '' : '<span class="sep">/</span><span class="cc" style="--cat:'+catOf(app.category).color+'"><i></i>'+esc(app.stage ? "Not working yet" : catOf(app.category).label)+'</span>';
   c.innerHTML = '<a href="#home" class="back">← All systems</a>' + mid + '<span class="sep">/</span><span class="here">'+esc(page==="progress" ? "Not working yet" : app.name)+'</span>';
 }
-function appCard(a, color){
+function appCard(a, color, tag){
   var feats = a.arch && a.arch.features ? a.arch.features.length : 0;
   var meta = [plural((a.nodes||[]).length, "part", "parts")];
   if (feats) meta.push(plural(feats, "walkthrough", "walkthroughs"));
   if (a.checked) meta.push("checked " + a.checked);
-  return '<a class="acard" href="#'+esc(a.id)+'" style="--cat:'+color+'" data-q="'+esc((a.name+" "+a.summary+" "+brandsOf(a, 20).join(" ")+" "+catOf(a.category).label).toLowerCase())+'">'
-    + '<span class="alogos">'+brandsOf(a, 6).map(function(b){ return '<span class="lg">'+logoSvg(b, 18)+'</span>'; }).join("")+'</span>'
+  return '<a class="acard" href="#'+esc(a.id)+'" data-cat="'+esc(a.category)+'" style="--cat:'+color+'" data-q="'+esc((a.name+" "+a.summary+" "+brandsOf(a, 20).join(" ")+" "+catOf(a.category).label).toLowerCase())+'">'
+    + (tag ? '<span class="atag"><i></i>'+esc(catOf(a.category).label)+'</span>' : '')
+    + '<span class="alogos">'+brandsOf(a, 6).map(function(b){ return '<span class="lg" title="'+esc(b)+'" aria-label="'+esc(b)+'">'+logoSvg(b, 18)+'</span>'; }).join("")+'</span>'
     + '<span class="an">'+esc(a.name)+'</span>'
     + '<span class="as">'+esc(firstSentence(a.summary))+'</span>'
     + (a.source && a.source.repo ? '<span class="arepo mono">'+esc(a.source.repo)+'</span>' : '')
+    + (feats ? '<span class="aw">'+esc(a.arch.features.slice(0, 2).map(function(f){ return f.name; }).join(" · "))+(feats > 2 ? ' <em>+ '+(feats-2)+' more</em>' : '')+'</span>' : '')
     + '<span class="am">'+esc(meta.join(" · "))+'</span>'
     + '<span class="ago">Open →</span></a>';
 }
@@ -208,18 +217,25 @@ function renderHome(){
   var cs = cats(), w = working(), prog = progressList();
   var used = cs.filter(function(c){ return w.some(function(a){ return a.category===c.id; }); });
   var h = '<section class="hhero"><h2>'+esc(DATA.title || "Your systems")+'</h2>'
-    + '<p>'+plural(w.length, "system", "systems")+(used.length > 1 ? ' in '+used.length+' groups' : '')+'. Pick one to see what it is made of, how its parts connect, and step-by-step walkthroughs of how it runs.</p>'
+    + '<p>'+plural(w.length, "system", "systems")+'. Pick one to see what it is made of, how its parts connect, and step-by-step walkthroughs of how it runs.</p>'
     + '<div class="hfind"><input type="search" id="find" placeholder="Find a system, a technology or a group…" aria-label="Find a system" autocomplete="off"></div>';
   if (used.length > 1 || prog.length){
     h += '<nav class="catjump" aria-label="Groups">' + used.map(function(c){ var n = w.filter(function(a){ return a.category===c.id; }).length; return '<a href="#home" data-cat="'+esc(c.id)+'" style="--cat:'+c.color+'"><i></i>'+esc(c.label)+'<b>'+n+'</b></a>'; }).join("")
       + (prog.length ? '<a href="#home" data-cat="in-progress" class="wip"><i></i>Not working yet<b>'+prog.length+'</b></a>' : '') + '</nav>';
   }
+  var flat = !used.some(function(c){ return w.filter(function(a){ return a.category===c.id; }).length >= 2; });
   h += '</section>';
+  if (flat){
+    h += '<div class="cards flat">'+w.map(function(a){ return appCard(a, catOf(a.category).color, true); }).join("")+'</div>';
+    used = [];
+  }
+  h += '<div class="catgrid">';
   used.forEach(function(c){
     var list = w.filter(function(a){ return a.category===c.id; });
-    h += '<section class="catsec" id="cat-'+esc(c.id)+'" style="--cat:'+c.color+'"><header><i></i><div><h3>'+esc(c.label)+'</h3>'+(c.desc ? '<p>'+esc(c.desc)+'</p>' : '')+'</div><span class="cn">'+plural(list.length, "system", "systems")+'</span></header>'
+    h += '<section class="catsec'+(list.length >= 3 ? ' wide' : '')+'" id="cat-'+esc(c.id)+'" style="--cat:'+c.color+'"><header><i></i><div><h3>'+esc(c.label)+'</h3>'+(c.desc ? '<p>'+esc(c.desc)+'</p>' : '')+'</div><span class="cn">'+plural(list.length, "system", "systems")+'</span></header>'
       + '<div class="cards">'+list.map(function(a){ return appCard(a, c.color); }).join("")+'</div></section>';
   });
+  h += '</div>';
   if (prog.length){
     h += '<section class="catsec wip" id="cat-in-progress"><header><i></i><div><h3>Not working yet</h3><p>Being built or set aside. What works today and what is left, for each.</p></div><span class="cn">'+plural(prog.length, "system", "systems")+'</span></header><div class="cards">'
       + prog.map(function(p){ return '<a class="acard wip" href="#in-progress"><span class="an">'+esc(p.name)+'</span><span class="as">'+esc(firstSentence(p.summary))+'</span><span class="am">'+esc((STAGE[p.stage]||p.stage)+(p.checked ? " · checked "+p.checked : ""))+'</span><span class="ago">See what is left →</span></a>'; }).join("")
@@ -230,6 +246,7 @@ function renderHome(){
   var f = $("find");
   f.addEventListener("input", function(){
     var q = f.value.trim().toLowerCase(), any = false;
+    each(host.querySelectorAll(".cards.flat .acard"), function(card){ var ok = !q || card.getAttribute("data-q").indexOf(q) >= 0; card.hidden = !ok; if (ok) any = true; });
     each(host.querySelectorAll(".catsec"), function(sec){
       var shown = 0;
       each(sec.querySelectorAll(".acard"), function(card){ var ok = !q || (card.getAttribute("data-q") || card.textContent.toLowerCase()).indexOf(q) >= 0; card.hidden = !ok; if (ok) shown++; });
@@ -237,7 +254,13 @@ function renderHome(){
     });
     $("nomatch").hidden = any;
   });
-  each(host.querySelectorAll(".catjump a"), function(a){ a.addEventListener("click", function(ev){ ev.preventDefault(); var el = $("cat-"+a.getAttribute("data-cat")); if (el) el.scrollIntoView({behavior:"smooth", block:"start"}); }); });
+  each(host.querySelectorAll(".catjump a"), function(a){ a.addEventListener("click", function(ev){
+    ev.preventDefault(); var id = a.getAttribute("data-cat"), el = $("cat-"+id);
+    if (el){ el.scrollIntoView({behavior:"smooth", block:"start"}); return; }
+    var on = a.getAttribute("aria-pressed")!=="true";
+    each(host.querySelectorAll(".catjump a"), function(x){ x.setAttribute("aria-pressed", String(on && x===a)); });
+    each(host.querySelectorAll(".cards.flat .acard"), function(c){ c.hidden = on && c.getAttribute("data-cat")!==id; });
+  }); });
 }
 function catLabel(id){ var c = (DATA.categories || []).filter(function(x){ return x.id===id; })[0]; return c ? c.label : ""; }
 function renderHead(){
@@ -253,21 +276,24 @@ function renderHead(){
 }
 function firstSentence(t){ var m = String(t).match(/^.*?[.!?](\s|$)/); return m ? m[0].trim() : t; }
 function tourButton(t, cls){
-  return '<button type="button" class="'+cls+'" data-tour="'+t.id+'"><span class="tn">'+esc(t.name)+'<span class="tagpill'+(t.warn?" warn":"")+'">'+esc(t.tag)+'</span></span>'
-    + '<span class="tl">'+esc(t.line)+'</span><span class="tc">'+(t.kind==="parts" ? "Start the tour" : t.steps.length+" steps · walk through")+' →</span></button>';
+  var showTag = t.kind==="parts" || t.warn || !allSame();
+  return '<button type="button" class="'+cls+'" data-tour="'+t.id+'"><span class="tn">'+esc(t.name)+(showTag ? '<span class="tagpill'+(t.warn?" warn":"")+'">'+esc(t.tag)+'</span>' : '')+'</span>'
+    + '<span class="tl">'+esc(t.line)+'</span><span class="tc">'+(t.kind==="parts" ? "Start the tour" : t.steps.length+" steps · plays on the map")+' →</span></button>';
 }
 var KIND = {store:"data", external:"service", core:"core"};
 function renderOverview(){
   var counts = {}; app.nodes.forEach(function(n){ counts[n.status]=(counts[n.status]||0)+1; });
   var stats = Object.keys(ST).filter(function(k){ return counts[k]; }).map(function(k){ return '<span title="'+esc(ST[k].means)+'">'+glyphSvg(k)+counts[k]+' '+esc(ST[k].label.toLowerCase())+'</span>'; }).join("");
+  var trust = app.source ? '<div class="trustcard"><b>How this was checked</b><p>Mapped by reading the source code only; nothing was installed or run. Every part, connection and step points at the files and lines it came from'+(app.source.refuted ? ', and a second, independent checker tried to disprove each claim. Anything it could not confirm is drawn dashed.' : '.')+'</p></div>' : '';
   var h = '<div class="story"><p class="lede">'+esc(app.summary)+'</p>'
     + '<dl class="facts">'+app.facts.map(function(f){ return '<dt>'+esc(f[0])+'</dt><dd>'+esc(f[1])+'</dd>'; }).join("")+'</dl>'
-    + '<div class="statrow"><span class="count">'+app.nodes.length+' parts</span><span class="stats">'+stats+'</span></div>';
+    + '<div class="statrow"><span class="count">'+app.nodes.length+' parts</span>'
+    + (allSame() ? '<span>'+(app.source ? (app.source.refuted ? 'All confirmed against the source code by a separate check.' : 'All taken from the source code.') : 'All '+esc(ST[app.nodes[0].status].label.toLowerCase())+'.')+'</span>' : '<span class="stats">'+stats+'</span>')+'</div>' + trust;
   if (app.blockers && app.blockers.length){
     h += '<div class="wait"><em>'+esc(app.blockersLabel || "Waiting on")+'</em>'
       + app.blockers.map(function(id){ var n = nodeById(id); return '<button type="button" class="chip" data-go="'+id+'" title="'+esc(firstSentence(n.state))+'">'+logoSvg(n.brand,14)+esc(n.label)+'</button>'; }).join("") + '</div>';
   }
-  h += '<div class="btnrow"><button type="button" class="btn primary" id="open-map">Open the interactive map →</button></div></div>';
+  h += '</div>';
   var feats = M.tours.filter(function(t){ return t.kind==="feature"; });
   h += '<section class="block"><div class="blockhead"><h3>Walk through it</h3><p>'+(feats.length ? "Each one follows a feature through the parts, one step at a time." : "Steps through the map one part at a time.")+'</p></div>'
     + '<div class="tourgrid">'+(feats.length ? feats : M.tours).map(function(t){ return tourButton(t, "tourcard"); }).join("")+'</div>'
@@ -276,12 +302,11 @@ function renderOverview(){
     + app.zones.map(function(z, zi){
         var ns = app.nodes.filter(function(n){ return n.zone===zi; });
         return '<div class="zonelist"><div class="zh"><b>'+esc(z.label)+'</b><span>'+ns.length+(ns.length===1?" part":" parts")+'</span></div>'
-          + ns.map(function(n){ return '<button type="button" data-go="'+n.id+'">'+logoSvg(n.brand,20)+'<span class="n">'+esc(n.label)+(KIND[n._kind] ? '<i class="kd">'+KIND[n._kind]+'</i>' : '')+'</span><span class="s">'+glyphSvg(n.status,10)+esc(ST[n.status].label)+'</span></button>'; }).join("")
+          + ns.map(function(n){ return '<button type="button" data-go="'+n.id+'">'+logoSvg(n.brand,20)+'<span class="n">'+esc(n.label)+(KIND[n._kind] ? '<i class="kd">'+KIND[n._kind]+'</i>' : '')+'</span>'+(allSame() ? '' : '<span class="s">'+glyphSvg(n.status,10)+esc(ST[n.status].label)+'</span>')+'</button>'; }).join("")
           + '</div>';
       }).join("") + '</div></section>';
   h += '<details class="caveat" id="caveat"><summary>How this was checked</summary><p>'+esc(app.caveat)+'</p></details>';
   var host = $("overview"); host.innerHTML = h;
-  $("open-map").addEventListener("click", function(){ setView("map"); });
   each(host.querySelectorAll("[data-go]"), function(b){ b.addEventListener("click", function(){ setView("map"); select(b.getAttribute("data-go")); }); });
   each(host.querySelectorAll("[data-tour]"), function(b){ b.addEventListener("click", function(){ setView("map"); startTour(b.getAttribute("data-tour")); }); });
 }
@@ -470,9 +495,9 @@ function fitBox(){ return aspectBox({x:0, y:0, w:M.view[0], h:M.view[1]+56}); }
 function clampBox(b){
   var f = fitBox();
   if (b.w >= f.w) return f;
-  var W = M.view[0], H = M.view[1]+56;
-  b.x = b.w >= W ? (W-b.w)/2 : Math.min(Math.max(b.x, 0), W-b.w);
-  b.y = b.h >= H ? (H-b.h)/2 : Math.min(Math.max(b.y, 0), H-b.h);
+  var P = 28, W = M.view[0]+P*2, H = M.view[1]+56+P*2;
+  b.x = b.w >= W ? (W-b.w)/2-P : Math.min(Math.max(b.x, -P), W-b.w-P);
+  b.y = b.h >= H ? (H-b.h)/2-P : Math.min(Math.max(b.y, -P), H-b.h-P);
   return b;
 }
 function focusBox(ids){
@@ -577,6 +602,7 @@ function bindCamera(){
 /* ---------- highlight state on the map ---------- */
 function applyState(anim){
   if (view!=="map") return;
+  var stg = $("stage"); if (stg) stg.classList.toggle("touring", !!tour);
   var host = $("svgwrap"), on = {}, soft = {}, lon = {}, lnow = {}, lsoft = {}, cur = null, active = !!(tour || sel || selL);
   if (tour){
     var s = tour.steps, seen = {}; cur = s[step][0];
@@ -642,7 +668,7 @@ function talksList(n, attr){
   }).join("") + '</ul></div>';
 }
 function kv(n){
-  return '<dl class="kv"><dt>Status</dt><dd>'+esc(n.state)+'</dd>'
+  return '<dl class="kv"><dt>'+(app.source ? 'Details' : 'Status')+'</dt><dd>'+esc(n.state)+'</dd>'
     + (n.where ? '<dt>Lives in</dt><dd class="mono">'+esc(n.where)+'</dd>' : '')
     + '<dt>Checked</dt><dd>'+esc(n.checked)+'</dd></dl>';
 }
@@ -654,6 +680,7 @@ function legendHtml(){
   h += '<span><i class="ln"></i>Connected</span>';
   if (M.links.some(function(l){ return l.pending; })) h += '<span><i class="ln dash"></i>Not connected yet</span>';
   if (M.links.some(function(l){ return l.unverified; }) || app.nodes.some(function(n){ return n.unverified; })) h += '<span><i class="ln dash unv"></i>Unverified claim</span>';
+  if (app.source && allSame()) return h + '<span>'+(app.source.refuted ? 'Solid outline: confirmed against the code' : 'Every part comes from the code')+'</span>';
   return h + Object.keys(ST).filter(function(k){ return used[k]; }).map(function(k){ return '<span title="'+esc(ST[k].means)+'">'+glyphSvg(k)+esc(ST[k].label)+'</span>'; }).join("");
 }
 function ghUrl(ev){
@@ -681,27 +708,29 @@ function renderPanel(){
   var p = $("panel"), keep = document.activeElement && document.activeElement.id, h;
   if (tour){
     var s = tour.steps, n = nodeById(s[step][0]), last = step===s.length-1;
-    h = '<div class="wkhead"><div><p class="kicker">Walkthrough</p><p class="wkname">'+esc(tour.name)+'<span class="tagpill'+(tour.warn?" warn":"")+'">'+esc(tour.tag)+'</span></p></div><button type="button" class="btn small" id="wk-exit">Exit</button></div>'
+    h = '<div class="wkhead"><div><p class="kicker">Walkthrough</p><p class="wkname">'+esc(tour.name)+(tour.warn || tour.kind==="parts" || !allSame() ? '<span class="tagpill'+(tour.warn?" warn":"")+'">'+esc(tour.tag)+'</span>' : '')+'</p></div><div class="wkx">'+(multi() ? '<a href="#home" class="btn small onlyphone" aria-label="All systems">← All</a>' : '')+'<button type="button" class="btn small" id="wk-exit">Exit</button></div></div>'
       + '<div class="sect"><div class="wkbar" aria-hidden="true">'+s.map(function(x, i){ return '<i'+(i<=step?' class="done"':'')+'></i>'; }).join("")+'</div>'
       + '<p class="wkcount">Step '+(step+1)+' of '+s.length+(tour.kind==="parts" ? ' · '+esc(app.zones[n.zone].label) : '')+'</p></div>'
       + '<div class="brandrow"><span class="logo">'+logoSvg(n.brand,24)+'</span><div style="min-width:0"><h2>'+esc(n.label)+'</h2>'+(n.sub?'<p class="sub">'+esc(n.sub)+'</p>':'')+'</div></div>'
       + '<p class="wktext">'+esc(s[step][1])+'</p>'
       + '<div class="wknav"><button type="button" class="btn" id="wk-prev"'+(step===0?" disabled":"")+'>← Back</button><button type="button" class="btn primary" id="wk-next">'+(last?"Finish":"Next →")+'</button></div>'
       + (s[step][2] ? evidenceHtml(s[step][2], s[step][3]==="unverified", "Evidence for this step") : '')
-      + '<div class="sect">'+statusLine(n)+kv(n)+'</div>'
-      + (tour.kind==="parts" ? talksList(n, "data-jump") : '')
+      + (tour.kind==="parts" ? '<div class="sect">'+statusLine(n)+kv(n)+'</div>' + talksList(n, "data-jump")
+          : '<details class="sect about"><summary>About '+esc(n.label)+'</summary><p class="what">'+esc(n.what)+'</p>'+kv(n)+'</details>')
       + '<div class="sect"><h3>All steps</h3><ol class="wksteps">'+s.map(function(x, i){ return '<li><button type="button" data-step="'+i+'" class="'+(i===step?"cur":i<step?"past":"")+'"'+(i===step?' aria-current="step"':'')+'><span>'+esc(nodeById(x[0]).label)+'</span></button></li>'; }).join("")+'</ol></div>';
   } else if (sel){
     h = '<div class="rowbetween"><p class="kicker">'+esc(app.zones[sel.zone].label)+' · '+code(sel)+'</p><button type="button" class="btn small" id="back">Close</button></div>'
       + '<div class="brandrow"><span class="logo">'+logoSvg(sel.brand,24)+'</span><div style="min-width:0"><h2>'+esc(sel.label)+'</h2>'+(sel.sub?'<p class="sub">'+esc(sel.sub)+'</p>':'')+'</div></div>'
-      + statusLine(sel)
-      + '<p class="what">'+esc(sel.what)+'</p>' + kv(sel) + evidenceHtml(sel.evidence, sel.unverified) + talksList(sel, "data-go");
+      + (allSame() ? '' : statusLine(sel))
+      + (app.source ? trustLine(sel.evidence, sel.unverified) : '')
+      + '<p class="what">'+esc(sel.what)+'</p>' + (app.source ? evidenceHtml(sel.evidence, sel.unverified) : '') + kv(sel) + talksList(sel, "data-go");
   } else if (selL){
     var fa = nodeById(selL.from), tb = nodeById(selL.to);
     h = '<div class="rowbetween"><p class="kicker">Connection</p><button type="button" class="btn small" id="back">Close</button></div>'
       + '<h2 class="lkh"><button type="button" class="lkn" data-go="'+esc(selL.from)+'">'+esc(fa ? fa.label : selL.from)+'</button> <span class="dir">→</span> <button type="button" class="lkn" data-go="'+esc(selL.to)+'">'+esc(tb ? tb.label : selL.to)+'</button></h2>'
       + (selL.label ? '<p class="what">'+esc(selL.label)+(selL.note ? ': '+esc(selL.note) : '')+'</p>' : '')
       + (selL.pending ? '<p class="hint">Not connected yet.</p>' : '')
+      + (app.source ? trustLine(selL.evidence, selL.unverified) : '')
       + evidenceHtml(selL.evidence, selL.unverified);
   } else {
     h = '<div class="sect"><h3>How to read the map</h3><div class="legend">'+legendHtml()+'</div></div>'
@@ -709,7 +738,8 @@ function renderPanel(){
       + '<p class="hint">Click any part for what it does, where it lives and what it talks to.</p>';
   }
   p.innerHTML = h; p.scrollTop = 0;
-  p.classList.toggle("scrolls", window.innerWidth > 1000 && p.scrollHeight > p.clientHeight + 4);
+  p.classList.toggle("scrolls", (window.innerWidth > 1000 || phone()) && p.scrollHeight > p.clientHeight + 4);
+  each(p.querySelectorAll("[data-jump-ev]"), function(a){ a.addEventListener("click", function(ev){ ev.preventDefault(); var e = p.querySelector(".evid"); if (e) e.scrollIntoView({block:"nearest", behavior:"smooth"}); }); });
   each(p.querySelectorAll("[data-go]"), function(b){ b.addEventListener("click", function(){ select(b.getAttribute("data-go")); }); });
   each(p.querySelectorAll("[data-tour]"), function(b){ b.addEventListener("click", function(){ startTour(b.getAttribute("data-tour")); }); });
   each(p.querySelectorAll("[data-step]"), function(b){ b.addEventListener("click", function(){ goStep(+b.getAttribute("data-step")); }); });

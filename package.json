@@ -1,6 +1,6 @@
 {
   "name": "visualizeflow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Reverse-engineer a codebase into an interactive architecture map where every part, link and walkthrough step cites the code it came from.",
   "type": "module",

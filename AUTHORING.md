@@ -171,9 +171,22 @@ step** carries evidence:
 - Status for a public repo you did not run: `built` ("In the code"); `planned`
   for what the docs promise but the code doesn't have; never `live`.
 
+### Write for a newcomer first
+
+- `summary` opens with one sentence a non-engineer understands ("Ollama lets you
+  download an AI chat model and run it on your own laptop."), then the technical
+  sentences.
+- Walkthrough steps say what happens in user terms first, then the code name:
+  "The server finds the model you asked for and starts a worker to run it
+  (ChatHandler → scheduleRunnerForModel)."
+- Avoid unexplained acronyms in `label`, `line` and step text; keep them for `sub`,
+  `state` and evidence notes.
+
 ### Refute pass
 
 After authoring, an independent checker reads each cited range and tries to
 disprove the claim. Claims it cannot confirm get `"unverified": true` (parts,
 links) or a 4th element `"unverified"` (steps): they are drawn dashed in amber
 and say so in the panel. Claims it shows to be wrong are fixed or removed.
+When the pass has run, set `"refuted": true` in `source`: the page then tells
+visitors each claim was confirmed by a second, independent check.

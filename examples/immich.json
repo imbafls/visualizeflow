@@ -9,7 +9,8 @@
   "source": {
     "repo": "immich-app/immich",
     "commit": "ff445d5fda8bf396e769df8977c316726dc25c9c",
-    "url": "https://github.com/immich-app/immich"
+    "url": "https://github.com/immich-app/immich",
+    "refuted": true
   },
   "summary": "Immich is a self-hosted photo and video library: the phone app backs up the camera roll, the web app browses, searches and shares it. One immich-server image runs a NestJS API and a job worker that pull work from Valkey through BullMQ and keep everything in Postgres with the VectorChord vector extension; a separate Python service runs the CLIP, face and OCR models. Mapped read-only from the code; nothing was run.",
   "facts": [

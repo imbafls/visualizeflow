@@ -87,7 +87,8 @@ write the map; split by parts, links and steps), each told to DISPROVE every
 claim against its cited code and return confirmed / wrong (with the fix) /
 unverified. Apply fixes. Remove claims shown false that can't be fixed. Mark
 claims that can't be confirmed `"unverified": true` (parts, links) or add a
-4th element `"unverified"` (steps); they draw dashed in amber. Re-validate.
+4th element `"unverified"` (steps); they draw dashed in amber. Then set
+`source.refuted: true` and re-validate.
 
 ## 5. Hand it over
 
