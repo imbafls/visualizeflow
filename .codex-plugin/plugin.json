@@ -1,0 +1,19 @@
+{
+  "name": "visualizeflow",
+  "version": "0.2.1",
+  "description": "Reverse-engineer a codebase into an interactive, evidence-backed architecture map with walkthroughs.",
+  "author": { "name": "imbafls" },
+  "homepage": "https://github.com/imbafls/visualizeflow",
+  "license": "MIT",
+  "keywords": ["architecture", "diagram", "codebase", "map", "walkthrough", "reverse engineering"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "visualizeflow",
+    "shortDescription": "Map how a codebase works",
+    "longDescription": "Reads a codebase and builds one interactive page: the parts you can click, how they connect, and step-by-step walkthroughs of how it runs. Every claim cites the exact files and lines it came from.",
+    "developerName": "imbafls",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/imbafls/visualizeflow"
+  }
+}

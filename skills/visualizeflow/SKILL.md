@@ -10,11 +10,14 @@ as an interactive page. Everything is read only: never install, build, run
 tests, start services, call paid APIs or write inside the project except the
 work folder below.
 
-The plugin holds the renderer, schema, checker and screenshot tool:
-`${CLAUDE_PLUGIN_ROOT}`. Read `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md` first (the
+**PLUGIN** below means the plugin folder: the folder two levels above this
+SKILL.md (it holds `renderer/`, `tools/` and `AUTHORING.md`). In Claude Code it is
+`${CLAUDE_PLUGIN_ROOT}`; in Codex, Gemini CLI, Grok Build, Cursor or any other agent,
+resolve it from this file's path. It holds the renderer, schema, checker and
+screenshot tool. Read `PLUGIN/AUTHORING.md` first (the
 schema, drawing rules and evidence rules) and
-`${CLAUDE_PLUGIN_ROOT}/examples/immich.json` (a finished map with evidence).
-If `${CLAUDE_PLUGIN_ROOT}/node_modules` is missing, run `npm install` there
+`PLUGIN/examples/immich.json` (a finished map with evidence).
+If `PLUGIN/node_modules` is missing, run `npm install` there
 once (it writes only inside the plugin).
 
 ## Where maps go: one page for all your systems
@@ -23,7 +26,7 @@ Every map is added to the person's **page**: one folder that holds every system
 they have mapped, built into one site with a home page grouped by category.
 - The page folder is `~/visualizeflow` unless `VF_WORK` is set or the person
   names another. Create it on first use with `data/meta.json` copied from
-  `${CLAUDE_PLUGIN_ROOT}/data/meta.json`, then set `"title"` (ask: "What should
+  `PLUGIN/data/meta.json`, then set `"title"` (ask: "What should
   the page be called?"; default "Architecture maps").
 - `/visualizeflow here` instead writes a one-off page to `.visualizeflow/` in the
   project (add it to `.git/info/exclude`, not `.gitignore`).
@@ -39,7 +42,7 @@ they have mapped, built into one site with a home page grouped by category.
   adding a new one; say what changed since the recorded commit
   (`git log --oneline <old>..HEAD`).
 
-Every tool takes `--work <folder>`. Below, `T=${CLAUDE_PLUGIN_ROOT}/tools`.
+Every tool takes `--work <folder>`. Below, `T=PLUGIN/tools`.
 
 ## 1. Understand the app
 

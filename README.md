@@ -7,7 +7,7 @@ and walkthrough step cites the code it was inferred from (file and lines at a
 fixed commit), and an independent checker tries to disprove every claim
 before the map is handed over.
 
-## Quick start
+## Quick start (Claude Code)
 
 You need [Claude Code](https://claude.com/claude-code), Node 20+ and Chrome (or Chromium).
 
@@ -50,6 +50,63 @@ you map is added to that one page. To see it again later:
 On first use it runs `npm install` inside the plugin folder (two dependencies), and it uses your
 installed Chrome to screenshot the map while checking it. A medium-sized repo takes about 20-40 minutes, mostly reading code and
 checking claims.
+
+## Other AI coding tools
+
+visualizeflow is plain instructions plus a few Node tools, so any coding agent that can read files and
+run commands can use it. These are tools you run on your own computer, inside a project.
+
+### OpenAI Codex CLI
+
+Run in a terminal:
+
+```
+codex plugin marketplace add imbafls/visualizeflow
+codex plugin add visualizeflow@visualizeflow
+```
+
+Then, in Codex inside any project:
+
+```
+Use the visualizeflow skill to map how this codebase works, with walkthroughs of its main flows.
+```
+
+### Gemini CLI
+
+```
+gemini extensions install https://github.com/imbafls/visualizeflow
+```
+
+Then, in Gemini CLI inside any project:
+
+```
+Use the visualizeflow skill to map how this codebase works, with walkthroughs of its main flows.
+```
+
+### Grok Build, Cursor, GitHub Copilot, Windsurf, Cline, and any other agent
+
+Paste this one prompt into the agent, inside the project you want mapped. It sets everything up
+the first time and reuses it after that:
+
+```
+Set up and run visualizeflow on this repository:
+1. If ~/.visualizeflow-plugin does not exist, run: git clone https://github.com/imbafls/visualizeflow ~/.visualizeflow-plugin
+   Otherwise run: git -C ~/.visualizeflow-plugin pull
+2. Run npm install inside ~/.visualizeflow-plugin
+3. Read ~/.visualizeflow-plugin/skills/visualizeflow/SKILL.md and follow it exactly to map this
+   repository. PLUGIN in that file means ~/.visualizeflow-plugin.
+Work read only on this repository: do not install, build or run anything in it.
+```
+
+| Tool | How | Tested |
+| ---- | --- | ------ |
+| Claude Code | plugin (Quick start above) | yes |
+| OpenAI Codex | plugin (`codex plugin add`) | yes |
+| Gemini CLI | extension | not yet |
+| Grok Build, Cursor, Copilot, Windsurf, Cline | the prompt above | not yet |
+
+Chat apps without access to your files (ChatGPT, Gemini or Grok on the web) can't run it. They can
+open the page it makes, though.
 
 ## Use
 

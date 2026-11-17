@@ -1,0 +1,5 @@
+{
+  "name": "visualizeflow",
+  "version": "0.2.1",
+  "description": "Reverse-engineer a codebase into an interactive, evidence-backed architecture map with walkthroughs."
+}
