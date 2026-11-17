@@ -1,0 +1,40 @@
+{
+  "statuses": {
+    "live": {
+      "label": "Live",
+      "means": "Running, and confirmed by a check"
+    },
+    "ready": {
+      "label": "Set up",
+      "means": "Account or key exists, not in use yet"
+    },
+    "built": {
+      "label": "In the code",
+      "means": "Found in the source code at the mapped commit (not run)"
+    },
+    "pending": {
+      "label": "Not set up",
+      "means": "Needs a setup step before it can work"
+    },
+    "paused": {
+      "label": "Paused",
+      "means": "Stopped by your call"
+    },
+    "planned": {
+      "label": "Planned",
+      "means": "Decided, not built yet"
+    },
+    "notes": {
+      "label": "From notes",
+      "means": "Not checked; taken from older notes"
+    }
+  },
+  "categories": [
+    {
+      "id": "apps",
+      "label": "Apps",
+      "description": "Everything mapped so far."
+    }
+  ],
+  "title": "Architecture maps"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "visualizeflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reverse-engineer a codebase into an interactive architecture map where every part, link and walkthrough step cites the code it came from.",
+  "type": "module",
+  "scripts": {
+    "validate": "node tools/validate.mjs",
+    "shot": "node tools/shot.mjs",
+    "build": "node tools/build.mjs",
+    "single": "node tools/single.mjs",
+    "mechanical": "node tools/mechanical.mjs",
+    "autolayout": "node tools/autolayout.mjs"
+  },
+  "dependencies": {
+    "elkjs": "0.10.0",
+    "playwright-core": "1.63.0"
+  }
+}

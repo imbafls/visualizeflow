@@ -1,0 +1,11 @@
+{
+  "name": "visualizeflow",
+  "owner": { "name": "visualizeflow" },
+  "plugins": [
+    {
+      "name": "visualizeflow",
+      "source": "./",
+      "description": "Reverse-engineer a codebase into an interactive, evidence-backed architecture map with walkthroughs."
+    }
+  ]
+}
