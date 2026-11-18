@@ -26,7 +26,7 @@ const app = JSON.parse(readFileSync(inPath, "utf8"));
 const arch = app.arch;
 
 // ---------- sizes from content ----------
-const LABEL_CH = 7.4, SUB_CH = 6.1, EDGE_CH = 6.6;
+const LABEL_CH = 7.4, SUB_CH = 6.5, EDGE_CH = 6.6;
 function size(n) {
   if (n.kind === "core") {
     const chipW = Math.max(0, ...(n.chips || []).map((c) => (c[0].length + c[1].length) * 6.4 + 60));
@@ -41,7 +41,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const snap = (v) => Math.ceil(v / 4) * 4;
 
 // ---------- zone order: where things run, left to right ----------
-const TAG_RANK = { device: 0, network: 1, release: 2, service: 3, content: 4, "third party": 5 };
+const TAG_RANK = { device: 0, network: 1, repo: 2, release: 2, service: 3, content: 4, "third party": 5 };
 const zoneOrder = app.zones.map((z, i) => i).sort((a, b) => (TAG_RANK[app.zones[a].tag] ?? 3) - (TAG_RANK[app.zones[b].tag] ?? 3) || a - b);
 const partOf = new Map(zoneOrder.map((zi, k) => [zi, k]));
 

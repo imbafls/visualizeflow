@@ -3,8 +3,7 @@
 
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <title>Architecture map · visualizeflow</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="styles.css">
 <div class="wrap">
   <header class="top">
@@ -41,7 +40,7 @@
     <div class="btnrow"><button class="btn" id="copy-all" type="button">Copy this map as text</button><span class="copystate" id="copy-all-state" role="status"></span></div>
   </details>
 
-  <footer><p>Made with visualizeflow, a tool that maps how software is built by reading its source code. Nothing was installed or run. Each part, connection and walkthrough step lists the files and lines it came from; an independent checker then tried to disprove every claim, and anything it could not confirm is drawn dashed. Logos are simplified drawings of each service's mark, for recognition only.</p></footer>
+  <footer><p>Made with visualizeflow, a tool that maps how software is built by reading its source code. <span id="footnote"></span> Logos are simplified drawings of each service's mark, for recognition only.</p></footer>
 </div>
 
 <script type="application/json" id="architecture-data"><<DATA>></script>

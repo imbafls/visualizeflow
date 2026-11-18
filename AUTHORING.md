@@ -26,7 +26,7 @@ and never put a key, token, password or private URL credential on it.
 | `blockers` | optional: node ids the app is waiting on (shown as chips on the overview) |
 | `blockersLabel` | optional heading for them, default "Waiting on" |
 | `view` | same as `arch.view` |
-| `zones` | `[{label, tag}]`: where parts run. `tag` is one of `device`, `service`, `third party`, `release`, `network`, `content`. A node's `zone` is an index into this list; the overview groups parts by it |
+| `zones` | `[{label, tag}]`: where parts run. `tag` is one of `device`, `service`, `third party`, `release`, `network`, `content`, `repo` (the rest of the repo, in a map of one folder). A node's `zone` is an index into this list; the overview groups parts by it |
 | `nodes` | the parts (below) |
 | `edges` | every connection as `{from, to, label, pending}`; the side panel's "Talks to" list reads this. Keep it in step with `arch.links`: one edge per link with the same from/to/label/pending |
 | `arch` | the drawing (below) |
@@ -48,16 +48,22 @@ and never put a key, token, password or private URL credential on it.
   `[name, note]` sub-features drawn inside it, ~30px each), `component`
   (a running part), `store` (data: drawn as a cylinder), `external` (someone
   else's service: drawn as a pill).
-- `brand`: a logo key from `var BR` in `src/app.js` (the validator lists them).
+- `brand`: a logo key from `var BR` in `renderer/app.js` (the validator lists them).
   Use the generic ones (`globe`, `server`, `terminal`, `laptop`, `loop`,
   `plug`, `chip`, `file`, `mic`, `graph`, `shield`, `key`, `film`, `chart`,
   `spark`, `wrench`, `branch`, `download`, `camera`) when no brand fits.
+- `sig`: optional list of words that name this part in code (`"sig": ["predict", "immich_ml"]`).
+  `tools/mechanical.mjs` looks for them in the lines a link cites; add it when a
+  part's file names and label are too generic to search for.
+- When the map is made by reading code only: `state` says what the code shows,
+  `where` is the path, and `checked` is the day plus "read the code".
 - `status`: `live` (running and confirmed by a check today), `ready` (account
   or key exists, not in use), `built` (code done, not deployed or switched
   off), `pending` (needs a setup step), `paused` (stopped on purpose),
   `planned` (decided, not built), `notes` (not checked; from older notes).
   Never mark `live` without a check today.
-- 12-28 parts. Show the real moving parts and every outside service it
+- 12-24 parts for a whole app (a map of one folder may have fewer; never pad).
+  Show the real moving parts and every outside service it
   depends on, the release path, and where data lives. Not every file.
 
 ### The drawing: `arch`
@@ -90,6 +96,8 @@ and never put a key, token, password or private URL credential on it.
   an optional box around parts that ship together (one app, one CT); its
   label sits on its top edge, so leave ~20px above its first part. A
   `group` is a labelled box links may point at as a whole (`from`/`to` its id).
+  A link to a group has no entry in `edges` (edges join parts only), so give
+  each part in the group at least one link of its own.
 - Parts: about 200-260 wide, 52-64 high (a `core` with chips taller). Keep
   at least 24px between parts and line up their x and y on a grid; tidy
   rows and columns read best.
@@ -102,8 +110,8 @@ and never put a key, token, password or private URL credential on it.
 - Link labels: 1-4 words, placed with `lx`/`ly` (text baseline) in clear
   space next to the line, `anchor` `start`/`middle`/`end`. The label box is
   ~6.6px per character wide and 17px high, sitting from `ly-12` to `ly+5`.
-- `features` are the walkthroughs, the best part of the page: 3-6 real
-  flows, how the app runs end to end (a user does X; a release ships; a
+- `features` are the walkthroughs, the best part of the page: 4-6 real
+  flows (2-3 for a small folder), how the app runs end to end (a user does X; a release ships; a
   nightly job runs; data comes back). 3-7 steps each, in order, each step a
   part and one sentence of what happens there. `links` lists the links the
   flow travels along. `status` is the flow's status; `tag` its pill text.
@@ -112,15 +120,28 @@ and never put a key, token, password or private URL credential on it.
 ### Check it
 
 ```bash
-node tools/validate.mjs <id> --work <work> --repo <project>   # must end with 0 errors; fix warnings too unless there is a reason
+node tools/validate.mjs <id> --work <work> --repo <root>   # must end with 0 errors; fix warnings too unless there is a reason
 node tools/shot.mjs <id> map --work <work>          # prints a PNG path: open it and look
 node tools/shot.mjs <id> overview --work <work>
 ```
+
+`<root>` is the repo root, or the folder itself when there is no git;
+`node tools/detect.mjs <path>` prints it.
 
 Look at the PNG for: parts or labels on top of each other, lines through
 parts, labels far from their line, text cut off ("…" means a label or
 sub is too long for its box), empty or cramped areas. Fix and shoot again
 until it reads cleanly.
+
+### First layout by machine
+
+`node tools/autolayout.mjs <in.json> <out.json>` places everything, so the
+input carries no coordinates: nodes without `x/y/w/h`, links without
+`pts/lx/ly/anchor`, captions as `{"lines": [...]}`, no `view` and no `place`
+regions (one is made per zone). A container or group is given as
+`{"id", "kind": "container" | "group", "label", "sub", "members": [node ids]}`.
+It is a first draft: look at the screenshot, and lay the map out by hand when
+the result is larger than about 1500 x 1000 or hard to read.
 
 ## In progress: `data/in-progress/<id>.json`
 
@@ -145,12 +166,27 @@ its card links to its map. Remove the three fields when it works.
 
 ## Evidence (reverse-engineering mode)
 
-When the map is made from a codebase, every claim cites the code it was
-inferred from. Add to the app:
+When the map is made from code, every claim cites the code it was inferred
+from. `node tools/detect.mjs <path>` looks at what you were pointed at and
+prints the `source` block to put in the app, unchanged. It is one of:
 
 ```json
-"source": {"repo": "owner/name", "commit": "<full 40-char hash>", "url": "https://github.com/owner/name"}
+"source": {"repo": "owner/name", "url": "https://github.com/owner/name", "host": "github", "commit": "<full 40-char hash>"}
+"source": {"repo": "owner/name", "url": "...", "host": "github", "commit": "<hash>", "subdir": "server"}
+"source": {"name": "myapp", "commit": "<hash>"}
+"source": {"local": true, "name": "myapp"}
 ```
+
+| Field | What |
+| ----- | ---- |
+| `commit` | The commit that was read. Required unless `local`. |
+| `repo`, `url`, `host` | Where the repo lives. `host` is `github`, `gitlab`, `bitbucket` or `other`; each citation links to its lines at the commit on the first three. Without `url`, or with `other`, citations are shown without links. |
+| `name` | What to call the code when there is no `repo` (a repo with no remote, or a plain folder). |
+| `subdir` | The map is of this one folder inside the repo. Evidence paths still start at the repo root. |
+| `local` | A folder with no commit (no git, or no commits yet). Citations are file and lines as read. |
+| `dirty` | The working copy had uncommitted changes when it was read. |
+| `hashes`, `stamped` | Written by `validate.mjs --stamp` for a `local` map: a fingerprint of each cited file, so a later run can tell which changed. |
+| `refuted`, `refute` | Written by `tools/refute.mjs apply`, never by hand (below). |
 
 Then each **part**, each **link** in `arch.links`, and each **walkthrough
 step** carries evidence:
@@ -159,17 +195,40 @@ step** carries evidence:
 "evidence": [{"file": "server/src/services/job.service.ts", "lines": [120, 164], "note": "queues thumbnail jobs after upload"}]
 ```
 
-- `file` is relative to the repo root, forward slashes. `lines` is
-  `[first, last]`, 1-based, and should be tight: the lines that show the
-  claim, not the whole file. `note` says in a few words what those lines show.
+- `file` is relative to the root `detect.mjs` printed (the repo root, even for
+  a map of one folder; the folder itself when there is no git), forward
+  slashes. `lines` is required: `[first, last]`, 1-based, and tight: the lines
+  that show the claim, not the whole file. `note` says in a few words what
+  those lines show.
 - A walkthrough step is `[nodeId, "text", [evidence...]]`.
 - 1-3 citations per claim is right. Cite code over docs; docs only when the
   claim is about intent or deployment.
-- `node tools/validate.mjs <id> --repo <path to the clone>` checks every cited
-  file exists and the lines are in range. A part or link with no evidence is a
-  warning, and an **error** when it claims `live` or `built`.
-- Status for a public repo you did not run: `built` ("In the code"); `planned`
+- A claim you cannot cite is left out, or marked unverified: `"unverified": true`
+  on a part or link, a 4th element `"unverified"` on a step. It is drawn dashed
+  in amber and says so. An uncited claim that is not marked is an **error**.
+- In a map of one folder (`subdir`):
+  - Parts inside the folder are drawn as usual, and every claim about them
+    cites at least one place inside the folder.
+  - Code elsewhere in the repo that the folder calls, or that calls it (the
+    server that posts to it, the compose file that runs it, the workflow that
+    builds it), is one part each in a zone "Rest of the repo" with tag `repo`.
+    Use `kind` `component` or `store` for these; `external` is for someone
+    else's service. Claims about them cite where the two meet: the line in the
+    folder that reaches out or receives the call, and the outside code that
+    makes the call when that is what shows it.
+  - Draw as many parts and walkthroughs as the folder really has. Do not pad
+    to reach a count, and do not cite a file just to have one inside the folder.
+- Status for code you did not run: `built` ("In the code"); `planned`
   for what the docs promise but the code doesn't have; never `live`.
+
+`node tools/validate.mjs <id> --work <work> --repo <root>` checks, as errors:
+the repo is at `source.commit` (and `<root>` is its root); every cited file
+exists, is part of that commit, and has the cited lines; every citation has
+`lines`; every unmarked claim has evidence; `refuted` matches a refute record.
+As warnings: cited files with uncommitted changes, one range cited by many
+claims, a built part that cites only docs, a folder-map claim that cites
+nothing inside the folder, and (for `local`) cited files that changed since
+the map was stamped.
 
 ### Write for a newcomer first
 
@@ -184,9 +243,26 @@ step** carries evidence:
 
 ### Refute pass
 
-After authoring, an independent checker reads each cited range and tries to
-disprove the claim. Claims it cannot confirm get `"unverified": true` (parts,
-links) or a 4th element `"unverified"` (steps): they are drawn dashed in amber
-and say so in the panel. Claims it shows to be wrong are fixed or removed.
-When the pass has run, set `"refuted": true` in `source`: the page then tells
-visitors each claim was confirmed by a second, independent check.
+After authoring, checkers that did not write the map read each cited range and
+try to disprove the claim. The pass is recorded, not just declared:
+
+```bash
+node tools/refute.mjs claims <id> --work <work>                      # one claims file per checker
+node tools/refute.mjs claims <id> --work <work> --pending v1.json    # only what is still open
+node tools/refute.mjs apply <id> v1.json v2.json ... --work <work>   # add --self when no independent checker exists
+```
+
+A checker writes `{"checker": "name", "verdicts": [{"id", "hash", "verdict", "note", "fix"}]}`
+with `id` and `hash` copied from its claims file and `verdict` one of
+`confirmed`, `wrong`, `unverified`. Claims judged wrong are fixed or removed
+by the author, and a fixed claim needs a fresh verdict (its hash changed).
+`apply` succeeds only when every claim has a `confirmed` or `unverified`
+verdict for its current wording. It marks the unverified ones, sets
+`"refuted": true` (or `"self"`) and a `"refute"` record holding a fingerprint
+of everything that was checked, and saves the verdicts in
+`<work>/data/refute/<id>.json`.
+
+The page words itself from that: `true` says each claim was confirmed by a
+second, independent check; `"self"` says the author re-read it; unset says no
+second check was run. Editing a claim, a citation or an unverified mark after
+the pass makes the validator fail until the changed claims are re-checked.

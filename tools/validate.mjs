@@ -1,17 +1,23 @@
 // Check map data before it is built or deployed.
 //
 //   node tools/validate.mjs            every app and in-progress entry
-//   node tools/validate.mjs myapp --work .visualizeflow --repo .   one map, with its evidence checked
+//   node tools/validate.mjs myapp --work <work> --repo <root>           one map, with its evidence checked
+//   node tools/validate.mjs myapp --work <work> --repo <root> --stamp   also save fingerprints of the cited files (a folder with no git)
 //
 // Errors fail the run (exit 1). Warnings are printed and do not fail it.
-// It checks the schema the page reads (src/app.js) and the drawing itself:
+// It checks the schema the page reads (renderer/app.js) and the drawing itself:
 // links that are not straight runs, ends that miss their part, parts that
 // overlap, labels on top of parts, and things outside the drawing.
+// With --repo it also checks the evidence: the repo is at the mapped commit,
+// every cited file is in that commit, and every line range exists.
+// <root> is the repo root, or the folder itself when there is no git
+// (tools/detect.mjs prints it).
 
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { WORK, META, SRC, takeArg } from "./paths.mjs";
+import { WORK, META, SRC } from "./paths.mjs";
+import { git, sha, digest, slash } from "./lib.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const meta = JSON.parse(readFileSync(META, "utf8"));
@@ -20,36 +26,72 @@ const BRANDS = new Set([...appJs.slice(appJs.indexOf("var BR = {"), appJs.indexO
 const STATUSES = new Set(Object.keys(meta.statuses));
 const CATS = new Set(meta.categories.map((c) => c.id));
 const KINDS = new Set(["component", "core", "store", "external"]);
-const ZONETAGS = new Set(["device", "service", "third party", "release", "network", "content"]);
+const ZONETAGS = new Set(["device", "service", "third party", "release", "network", "content", "repo"]);
 
 const argv = process.argv.slice(2);
 const ri = argv.indexOf("--repo");
 const REPO = ri >= 0 ? argv.splice(ri, 2)[1] : process.env.VF_REPO;
+const si = argv.indexOf("--stamp");
+const STAMP = si >= 0 && !!argv.splice(si, 1);
 const only = argv[0];
-const lineCache = new Map();
-function fileLines(f) {
-  if (lineCache.has(f)) return lineCache.get(f);
+if (ri >= 0 && (!REPO || !existsSync(REPO) || !statSync(REPO).isDirectory())) { console.log(`--repo ${REPO ?? ""} is not a folder`); process.exit(1); }
+const HOSTS = new Set(["github", "gitlab", "bitbucket", "other"]);
+const DOC = /\.(md|mdx|txt|rst|adoc)$/i;
+const fileCache = new Map();
+// A cited file: its line count and a fingerprint of its content, or null when it is not a file.
+function fileInfo(f) {
+  if (fileCache.has(f)) return fileCache.get(f);
   const p = join(REPO, f);
-  const n = existsSync(p) && !statSync(p).isDirectory() ? readFileSync(p, "utf8").split(/\r?\n/).length : -1;
-  lineCache.set(f, n); return n;
+  let v = null;
+  if (existsSync(p) && !statSync(p).isDirectory()) { const t = readFileSync(p, "utf8"); v = { lines: t.split(/\r?\n/).length, hash: sha(t.replace(/\r\n/g, "\n"), 12) }; }
+  fileCache.set(f, v); return v;
+}
+// What git says about --repo: its root, the commit it is at, and which files that commit holds.
+let gitCache;
+function gitInfo() {
+  if (gitCache !== undefined) return gitCache;
+  const top = git(REPO, "rev-parse", "--show-toplevel");
+  if (!top) return (gitCache = null);
+  const head = git(REPO, "rev-parse", "-q", "--verify", "HEAD");
+  const list = (args) => new Set((git(REPO, ...args) ?? "").split("\0").filter(Boolean));
+  return (gitCache = {
+    top, head, prefix: (git(REPO, "rev-parse", "--show-prefix") ?? "").replace(/\/+$/, ""),
+    tracked: head ? list(["ls-files", "-z"]) : new Set(),
+    dirty: head ? list(["diff", "--name-only", "--relative", "-z", "HEAD"]) : new Set(),
+  });
 }
 const COV = { claims: 0, cited: 0, unverified: 0, items: 0 };
+// Per map: what its source block means for the evidence checks.
+const freshCtx = () => ({ subdir: null, pinned: false, cites: new Map(), files: new Set(), changed: new Set() });
+let CTX = freshCtx(), FRESH = null;
 // Evidence: [{file, lines:[a,b], note}] on parts, links and walkthrough steps (step[2]).
-function checkEvidence(at, ev, strong, E, W, unv) {
+// A claim with no evidence must say so ("unverified"); it is then drawn dashed.
+function checkEvidence(at, ev, E, W, unv, outside = false) {
   COV.claims++; if (unv) COV.unverified++;
-  if (ev === undefined || (Array.isArray(ev) && !ev.length)) { (strong ? E : W).push(`${at}: no evidence (cite the file and lines it was inferred from)`); return; }
-  if (!Array.isArray(ev)) { E.push(`${at}: evidence must be [{file, lines, note}]`); return; }
+  if (ev !== undefined && !Array.isArray(ev)) { E.push(`${at}: evidence must be [{file, lines, note}]`); return; }
+  if (!ev || !ev.length) { if (!unv) E.push(`${at}: no evidence. Cite the file and lines it came from, or mark it unverified (it is then drawn dashed)`); return; }
   COV.cited++;
+  let inFolder = false;
   for (const x of ev) {
     COV.items++;
-    if (!isStr(x.file)) { E.push(`${at}: evidence item without "file"`); continue; }
-    if (x.file.startsWith("/") || x.file.includes("\\") || x.file.includes("..")) E.push(`${at}: evidence file "${x.file}" must be relative to the repo root, with forward slashes`);
-    if (x.lines !== undefined && !(Array.isArray(x.lines) && x.lines.length === 2 && x.lines.every(Number.isInteger) && x.lines[0] >= 1 && x.lines[1] >= x.lines[0])) E.push(`${at}: evidence ${x.file} lines must be [first, last] (1-based)`);
+    if (!x || !isStr(x.file)) { E.push(`${at}: evidence item without "file"`); continue; }
+    if (x.file.startsWith("/") || x.file.includes("\\") || x.file.split("/").includes("..")) { E.push(`${at}: evidence file "${x.file}" must be relative to the repo root, with forward slashes`); continue; }
+    const okLines = Array.isArray(x.lines) && x.lines.length === 2 && x.lines.every(Number.isInteger) && x.lines[0] >= 1 && x.lines[1] >= x.lines[0];
+    if (!okLines) E.push(`${at}: evidence ${x.file} needs lines [first, last] (1-based): the lines that show the claim`);
+    else { const k = `${x.file}:${x.lines[0]}-${x.lines[1]}`; CTX.cites.set(k, (CTX.cites.get(k) ?? new Set()).add(at)); }
+    if (CTX.subdir && x.file.startsWith(CTX.subdir + "/")) inFolder = true;
     if (!REPO) continue;
-    const n = fileLines(x.file);
-    if (n < 0) E.push(`${at}: evidence file ${x.file} does not exist in the repo`);
-    else if (Array.isArray(x.lines) && x.lines[1] > n) E.push(`${at}: evidence ${x.file} lines ${x.lines} run past the end (${n} lines)`);
+    const info = fileInfo(x.file);
+    if (!info) { E.push(`${at}: evidence file ${x.file} does not exist under ${slash(REPO)}`); continue; }
+    if (okLines && x.lines[1] > info.lines) E.push(`${at}: evidence ${x.file} lines ${x.lines} run past the end (${info.lines} lines)`);
+    CTX.files.add(x.file);
+    if (CTX.pinned) {
+      const g = gitInfo();
+      if (g && g.head && !g.tracked.has(x.file)) E.push(`${at}: evidence file ${x.file} is not in the commit (untracked or ignored), so it cannot be cited at that commit`);
+      else if (g && g.dirty.has(x.file)) CTX.changed.add(x.file);
+    }
   }
+  if (CTX.subdir && !inFolder && !outside) W.push(`${at}: cites nothing inside ${CTX.subdir}/, the folder this map is of`);
 }
 let errors = 0, warnings = 0;
 
@@ -59,6 +101,9 @@ function report(id, list, level) {
 
 const isStr = (v) => typeof v === "string" && v.trim().length > 0;
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+// Rough drawn width of a string at the page's small text size (times `scale` for larger or bolder text).
+// The page measures the real width; this only has to tell "fits" from "will be cut off".
+const textW = (t, scale = 1) => scale * [...t].reduce((w, ch) => w + (/[\s·.,:;|'()\/-]/.test(ch) ? 3 : /[iljItfr1]/.test(ch) ? 4 : /[mwMW]/.test(ch) ? 9 : /[A-Z]/.test(ch) ? 7.6 : 6.3), 0);
 const inside = (p, r, pad = 0) => p[0] > r.x + pad && p[0] < r.x + r.w - pad && p[1] > r.y + pad && p[1] < r.y + r.h - pad;
 const overlap = (a, b, gap = 0) => a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap;
 const onBorder = (p, n, tol = 3) => {
@@ -82,11 +127,40 @@ function checkApp(a, file) {
     if (!["building", "stalled", "parked"].includes(a.stage)) E.push(`stage must be building, stalled or parked (or leave it out for a working app)`);
     for (const k of ["works", "left"]) if (!Array.isArray(a[k]) || !a[k].every(isStr)) E.push(`an in-progress app needs "${k}", a list of sentences`);
   }
-  if (a.source !== undefined) {
-    if (!isStr(a.source.repo) || !/^[\w.-]+\/[\w.-]+$/.test(a.source.repo)) E.push(`source.repo must be "owner/name"`);
-    if (!isStr(a.source.commit) || !/^[0-9a-f]{40}$/.test(a.source.commit)) E.push(`source.commit must be the full 40-character commit hash`);
+  CTX = freshCtx();
+  const s = a.source;
+  if (s !== undefined && (typeof s !== "object" || s === null)) { E.push(`"source" must be an object`); return { E, W }; }
+  if (s !== undefined) {
+    if (s.local) {
+      if (s.commit !== undefined) E.push(`source.local (a folder with no commit) and source.commit cannot both be set`);
+    } else if (!isStr(s.commit) || !/^[0-9a-f]{40}$/.test(s.commit)) E.push(`source.commit must be the full 40-character commit hash (for a folder with no git, set source.local: true instead)`);
+    if (s.repo !== undefined && (!isStr(s.repo) || !/^[\w.-]+(\/[\w.-]+)+$/.test(s.repo))) E.push(`source.repo must be "owner/name"`);
+    if (s.repo === undefined && !isStr(s.name)) E.push(`source needs "repo" ("owner/name") or, when there is no remote, "name"`);
+    if (s.url !== undefined && !(isStr(s.url) && /^https?:\/\/[^\s"'<>]+$/.test(s.url))) E.push(`source.url must be an http(s) address`);
+    if (s.host !== undefined && !HOSTS.has(s.host)) E.push(`source.host must be one of ${[...HOSTS].join(", ")}`);
+    if (s.subdir !== undefined) {
+      if (!isStr(s.subdir) || s.subdir.startsWith("/") || s.subdir.endsWith("/") || s.subdir.includes("\\") || s.subdir.split("/").includes("..")) E.push(`source.subdir must be a folder path relative to the repo root, with forward slashes and no trailing slash`);
+      else { CTX.subdir = s.subdir; if (REPO && !(existsSync(join(REPO, s.subdir)) && statSync(join(REPO, s.subdir)).isDirectory())) E.push(`source.subdir "${s.subdir}" is not a folder under ${slash(REPO)}`); }
+    }
     if (!REPO) W.push(`no --repo given: cited files and line ranges were not checked`);
-  }
+    else {
+      const g = gitInfo();
+      if (s.commit) {
+        CTX.pinned = true;
+        if (!g || !g.head) E.push(`${slash(REPO)} is not a git repo with commits, but the map names commit ${String(s.commit).slice(0, 10)}`);
+        else {
+          if (g.prefix) E.push(`--repo must be the repo root (${g.top}), not a folder inside it; name the folder in source.subdir`);
+          if (g.head !== s.commit) E.push(`the repo is at commit ${g.head.slice(0, 10)} but the map says ${String(s.commit).slice(0, 10)}: check out that commit, or re-read the changed code and update source.commit`);
+        }
+      } else if (s.local && g && g.head && g.tracked.size) W.push(`source.local is set, but ${slash(REPO)} is in a git repo with commits: use source.commit so citations are pinned (tools/detect.mjs prints the block)`);
+    }
+    if (s.refuted !== undefined) {
+      if (s.refuted !== true && s.refuted !== "self") E.push(`source.refuted must be true or "self", and only tools/refute.mjs sets it`);
+      else if (!s.refute || !isStr(s.refute.digest)) E.push(`source.refuted is set but there is no refute record: only "tools/refute.mjs apply" sets it, once every claim has a verdict`);
+      else if (s.refute.digest !== digest(a)) E.push(`the map changed after its refute pass (a claim, a citation or an unverified mark): re-check what changed and run "tools/refute.mjs apply" again`);
+    }
+  } else if (REPO) E.push(`--repo was given but the map has no "source" block, so there is nothing to check the evidence against (tools/detect.mjs prints the block)`);
+  else W.push(`no "source" block: this map cites no code, and the page shows no evidence for it`);
   if (!isNum(a.order)) E.push(`"order" must be a number (position inside its category)`);
   if (!Array.isArray(a.facts) || !a.facts.every((f) => Array.isArray(f) && f.length === 2 && isStr(f[0]) && isStr(f[1]))) E.push(`"facts" must be [[label, value], ...]`);
   if (!Array.isArray(a.zones) || !a.zones.length) E.push(`"zones" must be a non-empty array`);
@@ -94,6 +168,8 @@ function checkApp(a, file) {
   if (!Array.isArray(a.nodes) || !a.nodes.length) { E.push(`"nodes" must be a non-empty array`); return { E, W }; }
 
   const ids = new Map();
+  // In a map of one folder, parts in a zone tagged "repo" or "third party" live outside it, so claims about them may cite code outside it.
+  const isOutside = (n) => !!n && ["repo", "third party"].includes(a.zones?.[n.zone]?.tag);
   a.nodes.forEach((n, i) => {
     const at = `node ${n.id ?? i}`;
     if (!isStr(n.id)) E.push(`${at}: no id`);
@@ -104,11 +180,20 @@ function checkApp(a, file) {
     if (!Number.isInteger(n.zone) || n.zone < 0 || n.zone >= (a.zones?.length ?? 0)) E.push(`${at}: zone ${n.zone} is not a zone index`);
     if (!STATUSES.has(n.status)) E.push(`${at}: status "${n.status}" is not one of ${[...STATUSES].join(", ")}`);
     if (n.kind && !KINDS.has(n.kind)) E.push(`${at}: kind "${n.kind}" is not one of ${[...KINDS].join(", ")}`);
-    if (!BRANDS.has(n.brand)) E.push(`${at}: brand "${n.brand}" has no logo in src/app.js (use one of: ${[...BRANDS].join(" ")})`);
+    if (!BRANDS.has(n.brand)) E.push(`${at}: brand "${n.brand}" has no logo in renderer/app.js (use one of: ${[...BRANDS].join(" ")})`);
     if (n.chips && !(Array.isArray(n.chips) && n.chips.every((c) => Array.isArray(c) && c.length === 2))) E.push(`${at}: chips must be [[name, note], ...]`);
     if (n.chips && n.chips.length && n.h < 60 + n.chips.length * 30) W.push(`${at}: ${n.chips.length} chips may not fit in h=${n.h}`);
     if (isStr(n.label) && n.label.length > 30) W.push(`${at}: label is ${n.label.length} characters; it will be squeezed`);
-    if (a.source) checkEvidence(at, n.evidence, ["live", "built"].includes(n.status) && !n.unverified, E, W, n.unverified);
+    if (isNum(n.w)) {
+      const room = n.w - (n.kind === "store" ? 57 : 60);
+      if (isStr(n.sub) && textW(n.sub) > room) W.push(`${at}: sub needs about ${Math.round(textW(n.sub))}px and has ${room}; it will be cut off with "…" (shorten it or widen the part)`);
+      if (n.kind !== "core" && isStr(n.label) && textW(n.label, 1.15) > room) W.push(`${at}: label needs about ${Math.round(textW(n.label, 1.15))}px and has ${room}; it will be cut off with "…" (shorten it or widen the part)`);
+      for (const c of Array.isArray(n.chips) ? n.chips : []) if (Array.isArray(c) && textW(String(c[0]), 1.08) + textW(String(c[1]), 0.95) + 12 > n.w - 46) W.push(`${at}: chip "${c[0]}" and its note need about ${Math.round(textW(String(c[0]), 1.08) + textW(String(c[1]), 0.95) + 58)}px, the part is ${n.w} wide; the two texts will overlap`);
+    }
+    if (a.source) {
+      checkEvidence(at, n.evidence, E, W, !!n.unverified, isOutside(n));
+      if (["live", "built"].includes(n.status) && Array.isArray(n.evidence) && n.evidence.length && n.evidence.every((x) => x && isStr(x.file) && DOC.test(x.file))) W.push(`${at}: cites only docs; a part that is "${n.status}" should cite the code that shows it`);
+    }
   });
 
   if (!Array.isArray(a.edges)) E.push(`"edges" must be an array`);
@@ -123,7 +208,7 @@ function checkApp(a, file) {
   if (!ar) { E.push(`"arch" is missing (every app draws a hand-laid map)`); return { E, W }; }
   const [VW, VH] = ar.view ?? [];
   if (!isNum(VW) || !isNum(VH)) { E.push(`arch.view must be [width, height]`); return { E, W }; }
-  if (VW < 600 || VW > 2400 || VH < 400 || VH > 1800) W.push(`arch.view ${VW}x${VH} is unusual (others are about 1200-1500 x 700-1000)`);
+  if (VW < 600 || VW > 1700 || VH < 400 || VH > 1200) W.push(`arch.view ${VW}x${VH} is unusual (aim for about 1200-1500 x 700-1000; much larger and the text is too small to read at a glance)`);
   const view = { x: 0, y: 0, w: VW, h: VH };
   const places = (ar.regions ?? []).filter((r) => r.kind === "place");
   if (!places.length) E.push(`arch.regions has no "place" region`);
@@ -171,18 +256,23 @@ function checkApp(a, file) {
       if (groups.get(l.from) && overlap(n, groups.get(l.from), -1) || groups.get(l.to) && overlap(n, groups.get(l.to), -1)) continue;
       for (let k = 0; k < l.pts.length - 1; k++) if (segHits(l.pts[k], l.pts[k + 1], n)) { W.push(`${at}: segment ${k} runs through node ${n.id}`); break; }
     }
+    for (const p of places) {
+      if (!isStr(p.label) || ![p.x, p.y].every(isNum)) continue;
+      const tag = { x: p.x + 14, y: p.y + 11, w: p.label.length * 8 + 4, h: 17 };
+      for (let k = 0; k < l.pts.length - 1; k++) if (segHits(l.pts[k], l.pts[k + 1], tag, 1)) { W.push(`${at}: segment ${k} runs through the title of place "${p.label}"`); break; }
+    }
     if (isStr(l.label)) {
       if (!isNum(l.lx) || !isNum(l.ly)) E.push(`${at}: has a label but no lx, ly`);
       else {
-        const w = l.label.length * 6.4 + 8, x0 = l.anchor === "start" ? l.lx : l.anchor === "end" ? l.lx - w : l.lx - w / 2;
-        const box = { x: x0, y: l.ly - 11, w, h: 14 };
+        const w = l.label.length * 6.6 + 12, x0 = l.anchor === "middle" ? l.lx - w / 2 : l.anchor === "end" ? l.lx - w + 6 : l.lx - 6;
+        const box = { x: x0, y: l.ly - 12, w, h: 17 };
         if (box.x < 0 || box.x + box.w > VW || box.y < 0 || box.y + box.h > VH) W.push(`${at}: label "${l.label}" runs outside the view`);
         for (const n of list) if (overlap(box, n, -2)) { W.push(`${at}: label "${l.label}" sits on node ${n.id}`); break; }
       }
       if (l.label.length > 34) W.push(`${at}: label is ${l.label.length} characters; keep link labels short`);
     }
     if (l.anchor && !["start", "middle", "end"].includes(l.anchor)) E.push(`${at}: anchor must be start, middle or end`);
-    if (a.source) checkEvidence(at, l.evidence, !l.pending && !l.unverified, E, W, l.unverified);
+    if (a.source) checkEvidence(at, l.evidence, E, W, !!l.unverified, isOutside(ids.get(l.from)) || isOutside(ids.get(l.to)));
   });
   for (const e of a.edges ?? []) if (!pairs.has(e.from + ">" + e.to)) W.push(`edge ${e.from} -> ${e.to} has no drawn link in arch.links (the panel lists it, the map does not show it)`);
   const epairs = new Set((a.edges ?? []).map((e) => e.from + ">" + e.to));
@@ -202,7 +292,7 @@ function checkApp(a, file) {
     if (!isStr(f.name) || !isStr(f.line)) E.push(`${at}: needs name and line`);
     if (!STATUSES.has(f.status)) E.push(`${at}: status "${f.status}" is not a status`);
     if (!Array.isArray(f.steps) || !f.steps.length) E.push(`${at}: needs steps`);
-    else f.steps.forEach((s, i) => { if (!ids.has(s[0])) E.push(`${at}: step ${i} names "${s[0]}", not a node`); if (!isStr(s[1])) E.push(`${at}: step ${i} has no text`); if (a.source) checkEvidence(`${at} step ${i}`, s[2], false, E, W, s[3] === "unverified"); });
+    else f.steps.forEach((s, i) => { if (!ids.has(s[0])) E.push(`${at}: step ${i} names "${s[0]}", not a node`); if (!isStr(s[1])) E.push(`${at}: step ${i} has no text`); if (a.source) checkEvidence(`${at} step ${i}`, s[2], E, W, s[3] === "unverified", isOutside(ids.get(s[0]))); });
     for (const id of f.links ?? []) if (!lids.has(id)) E.push(`${at}: link "${id}" is not in arch.links`);
   });
   (ar.captions ?? []).forEach((c, i) => {
@@ -213,6 +303,19 @@ function checkApp(a, file) {
       for (const n of list) if (overlap(box, n, -2)) { W.push(`caption ${i} sits on node ${n.id}`); break; }
     }
   });
+  if (s) {
+    for (const [k, who] of CTX.cites) if (who.size > 4) W.push(`${who.size} claims cite the same lines ${k}: each claim should cite the lines that show it, not one catch-all range`);
+    if (CTX.changed.size) W.push(`${CTX.changed.size} cited file(s) have uncommitted changes, so their lines may not match commit ${String(s.commit).slice(0, 10)}: ${[...CTX.changed].slice(0, 6).join(", ")}${CTX.changed.size > 6 ? ", ..." : ""}`);
+    if (s.local && REPO) {
+      const now = Object.fromEntries([...CTX.files].sort().map((f) => [f, fileInfo(f).hash]));
+      if (STAMP) { if (!E.length) FRESH = now; }
+      else if (!s.hashes) W.push(`no fingerprints saved yet: run validate once more with --stamp after the last edit, so a later run can tell which cited files changed`);
+      else {
+        const moved = Object.keys(now).filter((f) => s.hashes[f] && s.hashes[f] !== now[f]);
+        if (moved.length) W.push(`${moved.length} cited file(s) changed since the map was stamped: ${moved.slice(0, 6).join(", ")}${moved.length > 6 ? ", ..." : ""}. Re-read their citations, fix what moved, then run with --stamp`);
+      }
+    }
+  }
   return { E, W };
 }
 
@@ -241,9 +344,16 @@ for (const [type, dir, f] of jobs) {
   catch (e) { report(f, [`not valid JSON: ${e.message}`], "error"); errors++; continue; }
   if (seen.has(data.id)) { report(f, [`id "${data.id}" is also used by ${seen.get(data.id)}`], "error"); errors++; }
   seen.set(data.id, f);
+  FRESH = null;
   const { E, W } = type === "app" ? checkApp(data, f) : checkProgress(data, f);
   report(data.id ?? f, E, "error"); report(data.id ?? f, W, "warn");
   errors += E.length; warnings += W.length;
+  if (FRESH) {
+    const d = new Date(), months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    data.source.hashes = FRESH; data.source.stamped = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    writeFileSync(join(dir, f), JSON.stringify(data, null, 2) + "\n");
+    console.log(`  stamped ${data.id}: fingerprints of ${Object.keys(FRESH).length} cited file(s) saved`);
+  } else if (STAMP && type === "app") console.log(E.length ? `  not stamped: fix the errors first` : `  not stamped: --stamp is for a map with source.local, run with --repo`);
 }
 if (!only) {
   const codes = new Map();

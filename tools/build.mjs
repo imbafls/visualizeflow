@@ -1,9 +1,9 @@
-// Build the map into dist/.
+// Build the page into <work>/dist/.
 //
-//   node tools/build.mjs
+//   node tools/build.mjs --work <work>
 //
 // Reads data/meta.json, data/apps/*.json and data/in-progress/*.json, puts
-// them in one JSON block in src/template.html, and copies the page's assets.
+// them in one JSON block in renderer/template.html, and copies the page's assets.
 // Apps are ordered by category (meta.categories order), then by "order".
 // It runs tools/validate.mjs first and stops on any error.
 
@@ -11,7 +11,7 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync, copyFileSync, exis
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { WORK, META, SRC } from "./paths.mjs";
+import { WORK, META, SRC, ASSETS } from "./paths.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const v = spawnSync(process.execPath, [join(root, "tools/validate.mjs"), "--work", WORK, ...process.argv.slice(2)], { encoding: "utf8" });
@@ -37,5 +37,6 @@ const json = JSON.stringify(data).replace(/<\//g, "<\\/");
 const html = readFileSync(join(SRC, "template.html"), "utf8").replace("<<DATA>>", () => json).replace(/<<GENERATED>>/g, generated);
 mkdirSync(join(WORK, "dist"), { recursive: true });
 writeFileSync(join(WORK, "dist/index.html"), html);
-for (const f of ["app.js", "styles.css", "favicon.svg"]) copyFileSync(join(SRC, f), join(WORK, "dist", f));
+mkdirSync(join(WORK, "dist/fonts"), { recursive: true });
+for (const f of ASSETS) copyFileSync(join(SRC, f), join(WORK, "dist", f));
 console.log(`built ${join(WORK, "dist")}: ${apps.length} apps, ${inProgress.length} in progress, ${Math.round(html.length / 1024)} KB, dated ${generated}`);

@@ -10,7 +10,15 @@
     "repo": "immich-app/immich",
     "commit": "ff445d5fda8bf396e769df8977c316726dc25c9c",
     "url": "https://github.com/immich-app/immich",
-    "refuted": true
+    "refuted": true,
+    "refute": {
+      "date": "17 Nov 2026",
+      "checkers": 5,
+      "claims": 76,
+      "confirmed": 76,
+      "unverified": 0,
+      "digest": "6783fc104600028042194460ced60ca1"
+    }
   },
   "summary": "Immich is a self-hosted photo and video library: the phone app backs up the camera roll, the web app browses, searches and shares it. One immich-server image runs a NestJS API and a job worker that pull work from Valkey through BullMQ and keep everything in Postgres with the VectorChord vector extension; a separate Python service runs the CLIP, face and OCR models. Mapped read-only from the code; nothing was run.",
   "facts": [
@@ -486,7 +494,7 @@
       "brand": "spark",
       "label": "Notifications",
       "sub": "in-app · email jobs",
-      "what": "Turns events (album invite, album update, sign-up) into in-app notifications and, if the user wants them, rendered emails that a SendMail job sends over SMTP.",
+      "what": "Album invites and album updates become in-app notifications and, if the recipient's email settings allow, rendered emails. A sign-up sends only a welcome email, and only when the person creating the account asked for it. These three emails are queued as SendMail jobs that go out over SMTP.",
       "state": "In the code: email rendered with react-email and sent with nodemailer; skipped unless SMTP is enabled in the admin settings.",
       "where": "server/src/services/notification.service.ts, repositories/email.repository.ts",
       "checked": "16 Nov · read the code",
@@ -498,6 +506,14 @@
             382
           ],
           "note": "album invite: in-app notice, render email, queue SendMail"
+        },
+        {
+          "file": "server/src/services/notification.service.ts",
+          "lines": [
+            222,
+            227
+          ],
+          "note": "sign-up only queues NotifyUserSignup when notify is set"
         },
         {
           "file": "server/src/services/notification.service.ts",
@@ -832,7 +848,7 @@
       "brand": "redis",
       "label": "Valkey (Redis)",
       "sub": "BullMQ · socket.io",
-      "what": "The job queue: BullMQ keeps one queue per job type under the immich_bull prefix. The same Redis-protocol server also fans out socket.io events between workers.",
+      "what": "The job queue: BullMQ keeps 19 named queues (thumbnails, metadata, video conversion, notifications and so on) under the immich_bull prefix. Kinds of job share queues: the notifications queue, for one, carries both the sign-up notice and SendMail. The same Redis-protocol server also fans out socket.io events between workers.",
       "state": "In the code: compose runs valkey:9; jobs default to one attempt, removed on success, kept on failure.",
       "where": "docker/docker-compose.yml, repositories/job.repository.ts",
       "checked": "16 Nov · read the code",
@@ -851,7 +867,31 @@
             318,
             329
           ],
-          "note": "BullMQ config: prefix immich_bull, one queue per name"
+          "note": "BullMQ config: prefix immich_bull, one queue per QueueName"
+        },
+        {
+          "file": "server/src/enum.ts",
+          "lines": [
+            861,
+            881
+          ],
+          "note": "the 19 queue names"
+        },
+        {
+          "file": "server/src/services/notification.service.ts",
+          "lines": [
+            308,
+            309
+          ],
+          "note": "NotifyUserSignup runs on the notifications queue"
+        },
+        {
+          "file": "server/src/services/notification.service.ts",
+          "lines": [
+            446,
+            447
+          ],
+          "note": "SendMail runs on the notifications queue too"
         },
         {
           "file": "server/src/middleware/websocket.adapter.ts",

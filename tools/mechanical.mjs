@@ -1,45 +1,75 @@
 // Heuristic, mechanical support for each map link (no model involved).
-//   node tools/mechanical.mjs <id> --repo <clone>
+//   node tools/mechanical.mjs <id> --work <work> --repo <root>
 //
-// For link A -> B: look in the code next to A's cited files (same folders) for
-// a mention of B: an import of one of B's cited modules, or one of B's
-// signature words (from "sig" on the node if given, else its cited file names
-// and package-like words in its "sub"). A link with no hit is flagged for a
-// human to look at; a flag is not proof the link is wrong.
-import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+// A link A -> B should cite the place where one side refers to the other. So
+// for each of the link's own citations this asks: is the cited file on A's
+// side (a file A cites, or in the same folder as one) and do the cited lines
+// name B, or the other way round? "Naming" a part means one of its signature
+// words appears: "sig" on the node if given, else the names of the files it
+// cites and the distinctive words of its label and sub.
+//
+//   strong  the cited lines name the other end
+//   file    the cited file names it somewhere, though not in the cited lines
+//   none    neither; flagged for a person to look at
+//
+// A flag is not proof the link is wrong, and "strong" is not proof it is right:
+// this only finds links whose citations never mention what they claim to connect.
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, dirname, basename, extname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { WORK as root } from "./paths.mjs";
+import { WORK } from "./paths.mjs";
+
 const args = process.argv.slice(2), ri = args.indexOf("--repo");
-const REPO = args.splice(ri, 2)[1], id = args[0];
-const app = JSON.parse(readFileSync(join(root, "data/apps", id + ".json"), "utf8"));
+const REPO = ri >= 0 ? args.splice(ri, 2)[1] : process.env.VF_REPO;
+const id = args[0];
+if (!id || !REPO) { console.error("usage: mechanical.mjs <id> --repo <root> [--work <folder>]"); process.exit(1); }
+const app = JSON.parse(readFileSync(join(WORK, "data/apps", id + ".json"), "utf8"));
 const node = new Map(app.nodes.map((n) => [n.id, n]));
-const CODE = /\.(ts|js|mjs|svelte|dart|py|ya?ml|json|sql|sh|toml)$/;
-const dirCache = new Map();
-function filesIn(d) {
-  if (dirCache.has(d)) return dirCache.get(d);
-  const p = join(REPO, d), out = [];
-  if (existsSync(p)) for (const f of readdirSync(p)) { const q = join(p, f); if (statSync(q).isFile() && CODE.test(f) && statSync(q).size < 400000) out.push(q); }
-  dirCache.set(d, out); return out;
-}
-const textCache = new Map();
-const text = (f) => textCache.get(f) ?? (textCache.set(f, readFileSync(f, "utf8")), textCache.get(f));
+
+const squash = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "");
+const COMMON = new Set(["index", "main", "config", "readme", "package", "dockercompose", "dockerfile", "server", "service", "services", "client", "clients", "worker", "workers", "storage", "store", "files", "file", "jobs", "with", "from", "that", "this", "data", "local", "optional", "source", "build", "release", "library", "libraries", "external", "tools", "media", "model", "models", "event", "events", "request", "utils", "types", "common", "shared", "base", "core", "image", "images", "search", "queue", "import", "export", "test", "tests"]);
 function sig(n) {
-  if (Array.isArray(n.sig)) return n.sig;
+  if (Array.isArray(n.sig)) return n.sig.map(squash).filter(Boolean);
   const s = new Set();
-  for (const e of n.evidence ?? []) { const b = basename(e.file, extname(e.file)); if (b.length > 4 && !/^(index|main|app|config|readme|package|docker-compose)$/i.test(b)) s.add(b); }
-  for (const w of (n.sub ?? "").split(/[^A-Za-z0-9_.-]+/)) if (w.length > 3 && /[a-z]/.test(w) && !/^(with|from|that|this|jobs|files|server)$/i.test(w)) s.add(w);
+  const add = (w) => { const k = squash(w); if (k.length > 3 && /[a-z]/.test(k) && !COMMON.has(k)) s.add(k); };
+  for (const e of n.evidence ?? []) { const b = basename(e.file, extname(e.file)); add(b); for (const part of b.split(/[.\-_]/)) add(part); }
+  for (const w of `${n.label ?? ""} ${n.sub ?? ""}`.split(/[^A-Za-z0-9_.+-]+/)) add(w);
   return [...s];
 }
-let ok = 0; const flagged = [];
+const textCache = new Map();
+function lines(f) {
+  if (textCache.has(f)) return textCache.get(f);
+  const p = join(REPO, f);
+  const v = existsSync(p) && statSync(p).isFile() && statSync(p).size < 2_000_000 ? readFileSync(p, "utf8").split(/\r?\n/) : null;
+  textCache.set(f, v); return v;
+}
+const territory = (n) => ({ files: new Set((n.evidence ?? []).map((e) => e.file)), dirs: new Set((n.evidence ?? []).map((e) => dirname(e.file))) });
+const onSide = (t, f) => t.files.has(f) || t.dirs.has(dirname(f));
+const names = (text, words) => { const t = squash(text); return words.find((w) => t.includes(w)); };
+
+const tally = { strong: 0, file: 0, none: 0 }, flagged = [];
 for (const l of app.arch.links) {
   const A = node.get(l.from), B = node.get(l.to);
   if (!A || !B) continue;
-  const dirs = new Set((A.evidence ?? []).concat(l.evidence ?? []).map((e) => dirname(e.file)));
-  const words = sig(B);
-  let hit = null;
-  outer: for (const d of dirs) for (const f of filesIn(d)) { const t = text(f); for (const w of words) if (t.toLowerCase().includes(w.toLowerCase())) { hit = `${f.slice(REPO.length + 1).split("\\").join("/")} mentions "${w}"`; break outer; } }
-  if (hit) ok++; else flagged.push(`${l.id} (${l.from} -> ${l.to}): no mention of [${words.slice(0, 6).join(", ")}] near ${[...dirs].join(", ") || "(no cited files)"}`);
+  const tA = territory(A), tB = territory(B), wA = sig(A), wB = sig(B);
+  let best = "none", why = "";
+  for (const e of l.evidence ?? []) {
+    const all = lines(e.file); if (!all) continue;
+    const range = all.slice((e.lines?.[0] ?? 1) - 1, e.lines?.[1] ?? all.length).join("\n");
+    // which end does this citation have to name? the one whose side it is not on
+    const wants = [];
+    if (onSide(tA, e.file) || !onSide(tB, e.file)) wants.push(["B", wB]);
+    if (onSide(tB, e.file)) wants.push(["A", wA]);
+    for (const [, words] of wants) {
+      const hit = names(range, words);
+      if (hit) { best = "strong"; why = `${e.file}:${e.lines?.join("-")} names "${hit}"`; break; }
+      if (best === "none" && names(all.join("\n"), words)) best = "file";
+    }
+    if (best === "strong") break;
+  }
+  tally[best]++;
+  if (best === "strong") continue;
+  const first = (l.evidence ?? [])[0], other = first && onSide(tB, first.file) && !onSide(tA, first.file) ? A : B, words = other === A ? wA : wB;
+  flagged.push(`${best === "file" ? "weak" : "flag"} ${l.id} (${l.from} -> ${l.to}): ${best === "file" ? "the cited files name the other end, but not in the cited lines" : !first ? "no citations" : !words.length ? `no distinctive words for ${other.id} to look for (add "sig": ["..."] to that part)` : `its citations never name ${other.id} [${words.slice(0, 6).join(", ")}]`}`);
 }
-console.log(`mechanical support: ${ok}/${app.arch.links.length} links`);
-for (const f of flagged) console.log("  flag " + f);
+console.log(`mechanical support: ${tally.strong}/${app.arch.links.length} links name the other end in their cited lines, ${tally.file} only elsewhere in the cited file, ${tally.none} not at all`);
+for (const f of flagged) console.log("  " + f);

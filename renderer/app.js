@@ -172,11 +172,26 @@ function brandsOf(a, max){
   return named.concat(generic).slice(0, max);
 }
 function allSame(){ return !!app && app.nodes.every(function(n){ return n.status===app.nodes[0].status && !n.unverified; }); }
+/* How far the map was checked. Only tools/refute.mjs sets source.refuted, once every claim has a verdict:
+   true = by checkers that did not write the map, "self" = re-read by the author, unset = not checked. */
+function checked(a){ var s = (a || app).source; return !s ? "" : s.refuted===true ? "independent" : s.refuted==="self" ? "self" : "none"; }
+function unvText(){ return checked()==="independent" ? "an independent check could not confirm this against the code." : checked()==="self" ? "a second read could not confirm this against the code." : "this has not been confirmed against the code."; }
+/* Where the code came from: "owner/name/folder @ abc1234", or the folder's name when there is no commit. */
+function srcName(a){ var s = (a || app).source; return !s ? "" : (s.repo || s.name || "") + (s.subdir ? "/" + s.subdir : ""); }
+function srcAt(){ var s = app.source; return !s ? "" : s.commit ? " @ " + s.commit.slice(0,7) + (s.dirty ? " + local changes" : "") : " · local folder, no commit"; }
 function trustLine(list, unv){
-  var n = (list || []).length;
-  if (unv) return '<p class="trust warn">Not confirmed: an independent check could not confirm this against the code.</p>';
+  var n = (list || []).length, c = checked();
+  if (unv) return '<p class="trust warn">Not confirmed: '+unvText()+'</p>';
   if (!n) return '';
-  return '<p class="trust"><a href="#" data-jump-ev="1">Backed by '+plural(n, "place", "places")+' in the source code</a>'+(app.source && app.source.refuted ? ', and confirmed by a second, independent check.' : '.')+'</p>';
+  return '<p class="trust"><a href="#" data-jump-ev="1">Backed by '+plural(n, "place", "places")+' in the source code</a>'+(c==="independent" ? ', and confirmed by a second, independent check.' : c==="self" ? ', and re-read a second time.' : '.')+'</p>';
+}
+function footNote(){
+  var c = checked();
+  if (!app || !c) return "";
+  return "Nothing was installed or run. Each part, connection and walkthrough step lists the files and lines it came from"
+    + (c==="independent" ? "; an independent checker then tried to disprove every claim, and anything it could not confirm is drawn dashed."
+      : c==="self" ? "; every claim was then re-read against the code a second time, without an independent checker, and anything that could not be confirmed is drawn dashed."
+      : ". No second check has been run on this map yet.");
 }
 function plural(n, one, many){ return n + " " + (n===1 ? one : many); }
 function renderJump(){
@@ -208,7 +223,7 @@ function appCard(a, color, tag){
     + '<span class="alogos">'+brandsOf(a, 6).map(function(b){ return '<span class="lg" title="'+esc(b)+'" aria-label="'+esc(b)+'">'+logoSvg(b, 18)+'</span>'; }).join("")+'</span>'
     + '<span class="an">'+esc(a.name)+'</span>'
     + '<span class="as">'+esc(firstSentence(a.summary))+'</span>'
-    + (a.source && a.source.repo ? '<span class="arepo mono">'+esc(a.source.repo)+'</span>' : '')
+    + (srcName(a) ? '<span class="arepo mono">'+esc(srcName(a))+'</span>' : '')
     + (feats ? '<span class="aw">'+esc(a.arch.features.slice(0, 2).map(function(f){ return f.name; }).join(" · "))+(feats > 2 ? ' <em>+ '+(feats-2)+' more</em>' : '')+'</span>' : '')
     + '<span class="am">'+esc(meta.join(" · "))+'</span>'
     + '<span class="ago">Open →</span></a>';
@@ -266,7 +281,7 @@ function catLabel(id){ var c = (DATA.categories || []).filter(function(x){ retur
 function renderHead(){
   var c = catOf(app.category);
   $("apphead").innerHTML = '<div class="titleblock"><h2>'+esc(app.name)+'</h2><p class="kicker">'
-    + (app.source && app.source.repo ? '<span class="mono">'+esc(app.source.repo)+(app.source.commit ? ' @ '+esc(app.source.commit.slice(0,7)) : '')+'</span>' : '')
+    + (srcName() ? '<span class="mono">'+esc(srcName()+srcAt())+'</span>' : '')
     + (app.checked ? '<span>checked '+esc(app.checked)+'</span>' : '')+'</p></div>'
     + '<div class="viewtabs" role="tablist" aria-label="How to look at it">'
     + '<button type="button" role="tab" id="view-overview" aria-selected="'+(view==="overview")+'"><b>Summary</b><span>What it is, its parts, its flows</span></button>'
@@ -284,11 +299,19 @@ var KIND = {store:"data", external:"service", core:"core"};
 function renderOverview(){
   var counts = {}; app.nodes.forEach(function(n){ counts[n.status]=(counts[n.status]||0)+1; });
   var stats = Object.keys(ST).filter(function(k){ return counts[k]; }).map(function(k){ return '<span title="'+esc(ST[k].means)+'">'+glyphSvg(k)+counts[k]+' '+esc(ST[k].label.toLowerCase())+'</span>'; }).join("");
-  var trust = app.source ? '<div class="trustcard"><b>How this was checked</b><p>Mapped by reading the source code only; nothing was installed or run. Every part, connection and step points at the files and lines it came from'+(app.source.refuted ? ', and a second, independent checker tried to disprove each claim. Anything it could not confirm is drawn dashed.' : '.')+'</p></div>' : '';
+  var ck = checked(), rf = app.source && app.source.refute;
+  var tally = rf && ck!=="none" ? ' Checked '+esc(rf.date)+': '+rf.confirmed+' of '+rf.claims+' claims confirmed'+(rf.unverified ? ', '+rf.unverified+' could not be confirmed' : '')+'.' : '';
+  var trust = app.source ? '<div class="trustcard'+(ck==="none" ? ' open' : '')+'"><b>How this was checked</b><p>Mapped by reading the source code only; nothing was installed or run. Every part, connection and step points at the files and lines it came from'
+    + (ck==="independent" ? ', and a second, independent checker tried to disprove each claim. Anything it could not confirm is drawn dashed.'
+      : ck==="self" ? '. Each claim was then re-read against the code a second time, by the same author rather than an independent checker. Anything that could not be confirmed is drawn dashed.'
+      : '. No second check has been run on it yet.')
+    + tally + (app.source.subdir ? ' This map covers the folder '+esc(app.source.subdir)+'/ only; the rest of the repo appears as outside parts.' : '')
+    + (app.source.local ? ' The folder has no commit to pin to, so citations are file and line as read'+(app.source.stamped ? ' on '+esc(app.source.stamped) : '')+'.' : '')
+    + (app.source.dirty ? ' The working copy had uncommitted changes when it was read, so a cited line may differ from the commit.' : '')+'</p></div>' : '';
   var h = '<div class="story"><p class="lede">'+esc(app.summary)+'</p>'
     + '<dl class="facts">'+app.facts.map(function(f){ return '<dt>'+esc(f[0])+'</dt><dd>'+esc(f[1])+'</dd>'; }).join("")+'</dl>'
     + '<div class="statrow"><span class="count">'+app.nodes.length+' parts</span>'
-    + (allSame() ? '<span>'+(app.source ? (app.source.refuted ? 'All confirmed against the source code by a separate check.' : 'All taken from the source code.') : 'All '+esc(ST[app.nodes[0].status].label.toLowerCase())+'.')+'</span>' : '<span class="stats">'+stats+'</span>')+'</div>' + trust;
+    + (allSame() ? '<span>'+(app.source ? (ck==="independent" ? 'All confirmed against the source code by a separate check.' : ck==="self" ? 'All taken from the source code and re-read once.' : 'All taken from the source code.') : 'All '+esc(ST[app.nodes[0].status].label.toLowerCase())+'.')+'</span>' : '<span class="stats">'+stats+'</span>')+'</div>' + trust;
   if (app.blockers && app.blockers.length){
     h += '<div class="wait"><em>'+esc(app.blockersLabel || "Waiting on")+'</em>'
       + app.blockers.map(function(id){ var n = nodeById(id); return '<button type="button" class="chip" data-go="'+id+'" title="'+esc(firstSentence(n.state))+'">'+logoSvg(n.brand,14)+esc(n.label)+'</button>'; }).join("") + '</div>';
@@ -680,26 +703,33 @@ function legendHtml(){
   h += '<span><i class="ln"></i>Connected</span>';
   if (M.links.some(function(l){ return l.pending; })) h += '<span><i class="ln dash"></i>Not connected yet</span>';
   if (M.links.some(function(l){ return l.unverified; }) || app.nodes.some(function(n){ return n.unverified; })) h += '<span><i class="ln dash unv"></i>Unverified claim</span>';
-  if (app.source && allSame()) return h + '<span>'+(app.source.refuted ? 'Solid outline: confirmed against the code' : 'Every part comes from the code')+'</span>';
+  if (app.source && allSame()) return h + '<span>'+(checked()==="independent" ? 'Solid outline: confirmed against the code' : 'Every part comes from the code')+'</span>';
   return h + Object.keys(ST).filter(function(k){ return used[k]; }).map(function(k){ return '<span title="'+esc(ST[k].means)+'">'+glyphSvg(k)+esc(ST[k].label)+'</span>'; }).join("");
 }
-function ghUrl(ev){
-  var src = app.source; if (!src || !src.repo || !src.commit) return null;
-  var u = "https://github.com/"+src.repo+"/blob/"+src.commit+"/"+ev.file.split("/").map(encodeURIComponent).join("/");
-  if (ev.lines && ev.lines.length) u += "#L"+ev.lines[0]+(ev.lines[1] && ev.lines[1]!==ev.lines[0] ? "-L"+ev.lines[1] : "");
-  return u;
+/* A link to the cited lines at the mapped commit, on the hosts whose address shape is known. No commit or no known host: no link. */
+function srcHost(s){ if (s.host) return s.host; var u = s.url || ""; return /bitbucket\.org/.test(u) ? "bitbucket" : /gitlab/.test(u) ? "gitlab" : (/github\.com/.test(u) || (!u && s.repo)) ? "github" : "other"; }
+function evUrl(ev){
+  var s = app.source; if (!s || !s.commit || s.local) return null;
+  var host = srcHost(s), base = (s.url || (s.repo ? "https://github.com/"+s.repo : "")).replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(base) || host==="other") return null;
+  var p = ev.file.split("/").map(encodeURIComponent).join("/"), a = ev.lines && ev.lines[0], b = ev.lines && ev.lines[1], two = b && b!==a;
+  if (host==="github") return base+"/blob/"+s.commit+"/"+p+(a ? "#L"+a+(two ? "-L"+b : "") : "");
+  if (host==="gitlab") return base+"/-/blob/"+s.commit+"/"+p+(a ? "#L"+a+(two ? "-"+b : "") : "");
+  if (host==="bitbucket") return base+"/src/"+s.commit+"/"+p+(a ? "#lines-"+a+(two ? ":"+b : "") : "");
+  return null;
 }
 function evidenceHtml(list, unv, title){
   list = list || [];
   var h = '<div class="sect evid"><h3>'+esc(title||"Evidence")+(list.length?' <span class="cnt">'+list.length+'</span>':'')+'</h3>';
-  if (unv) h += '<p class="unvnote">Unverified: an independent check could not confirm this against the cited code.</p>';
+  if (unv) h += '<p class="unvnote">Unverified: '+(list.length ? unvText() : 'no code was cited for this.')+'</p>';
   if (!list.length) return h + '<p class="hint">No code cited.</p></div>';
   h += '<ul class="evlist">' + list.map(function(ev){
     var where = ev.file + (ev.lines && ev.lines.length ? ":"+ev.lines[0]+(ev.lines[1]&&ev.lines[1]!==ev.lines[0]?"-"+ev.lines[1]:"") : "");
-    var u = ghUrl(ev);
+    var u = evUrl(ev);
     return '<li>'+(u ? '<a class="mono" href="'+esc(u)+'" target="_blank" rel="noopener">'+esc(where)+'</a>' : '<span class="mono">'+esc(where)+'</span>')+(ev.note?'<span class="evn">'+esc(ev.note)+'</span>':'')+'</li>';
   }).join("") + '</ul>';
-  if (app.source && app.source.commit) h += '<p class="evsrc">At '+esc(app.source.repo)+' @ <span class="mono">'+esc(app.source.commit.slice(0,10))+'</span></p>';
+  if (app.source && app.source.commit) h += '<p class="evsrc">At '+esc(app.source.repo || app.source.name || "the repo")+' @ <span class="mono">'+esc(app.source.commit.slice(0,10))+'</span>'+(app.source.dirty ? ', read with uncommitted changes' : '')+'</p>';
+  else if (app.source && app.source.local) h += '<p class="evsrc">In the folder '+esc(app.source.name || "")+', as read'+(app.source.stamped ? ' on '+esc(app.source.stamped) : '')+' (no commit)</p>';
   return h + '</div>';
 }
 function linkById(id){ for (var i=0;i<M.links.length;i++) if (M.links[i].id===id) return M.links[i]; return null; }
@@ -823,6 +853,7 @@ function showOnly(which){
   $("apphead").hidden = which==="home";
   $("overview").hidden = which!=="app" || view!=="overview"; $("mapview").hidden = which!=="app" || view!=="map";
   $("agentsbox").hidden = which!=="app";
+  var fn = $("footnote"); if (fn) fn.textContent = which==="app" ? footNote() : "";
 }
 function route(force){
   var id = (location.hash || "").replace("#","");

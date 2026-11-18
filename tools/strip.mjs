@@ -1,6 +1,6 @@
 // Turn a hand-laid app into the "what only" input autolayout reads.
 //
-//   node tools/al/strip.mjs <hand.json | live-index.html#appId> <out.json> [newId] [code] [category]
+//   node tools/strip.mjs <hand.json | live-index.html#appId> <out.json> [newId] [code] [category]
 //
 // Drops every coordinate: node x/y/w/h, region x/y/w/h, link pts/lx/ly/anchor,
 // caption x/y, arch.view and the top-level view. Containers and groups are kept
@@ -37,6 +37,6 @@ if (newId) app.id = newId;
 if (code) app.code = code;
 if (category) app.category = category;
 if (app.order == null) app.order = 99;
-if (!app.checked) app.checked = "16 Nov 2026";
+if (!app.checked) { const d = new Date(); app.checked = `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]} ${d.getFullYear()}`; }
 writeFileSync(out, JSON.stringify(app, null, 2));
 console.log(out, `${app.nodes.length} nodes, ${app.arch.links.length} links, ${regions.length} containers/groups`);
